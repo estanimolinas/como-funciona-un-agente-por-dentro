@@ -20,9 +20,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from coderag_mcp.config import get_settings
 from coderag_mcp.mcp_server.server import mcp
 
-mcp_app = mcp.streamable_http_app(streamable_http_path="/")
+settings = get_settings()
+
+mcp_app = mcp.streamable_http_app(streamable_http_path="/", host=settings.public_host)
 
 
 @asynccontextmanager

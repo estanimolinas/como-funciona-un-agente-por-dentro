@@ -32,6 +32,13 @@ python3 -m venv .venv
 ./.venv/bin/uvicorn coderag_mcp.api.main:app --reload
 ```
 
+## MCP server
+
+An MCP server (Streamable HTTP transport) is mounted at `/mcp` on the same
+running app. It currently exposes a single tool, `ping`, used to verify the
+protocol wiring end-to-end; real code-RAG tools will be added in a later
+plan.
+
 ## Test
 
 ```bash
