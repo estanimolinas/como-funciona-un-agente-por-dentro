@@ -61,3 +61,13 @@ def test_rejects_scp_style_ssh_url():
 def test_rejects_file_scheme():
     with pytest.raises(InvalidRepoURLError):
         clone_repo("file:///etc/passwd")
+
+
+def test_rejects_userless_scp_style_url():
+    with pytest.raises(InvalidRepoURLError):
+        clone_repo("10.0.0.5:repo.git")
+
+
+def test_rejects_userless_scp_style_url_with_metadata_ip():
+    with pytest.raises(InvalidRepoURLError):
+        clone_repo("169.254.169.254:repo.git")
