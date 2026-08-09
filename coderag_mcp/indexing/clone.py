@@ -1,6 +1,7 @@
 """Validated, capped git cloning for the indexing pipeline."""
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,15 +14,19 @@ ALLOWED_HOSTS = {"github.com", "gitlab.com"}
 MAX_REPO_SIZE_MB = 200
 CLONE_TIMEOUT_S = 60
 
+_SCP_STYLE_RE = re.compile(r"^[^/@]+@[^/]+:")
+
 
 def _validate_url(url: str) -> None:
     parsed = urlparse(url)
     if parsed.scheme in ("http", "https"):
         if parsed.hostname not in ALLOWED_HOSTS:
             raise InvalidRepoURLError(f"host not allowed: {parsed.hostname!r}")
-    elif parsed.scheme in ("", "file"):
-        # Bare local filesystem paths (used by tests against local fixture
-        # repos) never leave the machine, so there is no SSRF surface to
+    elif parsed.scheme == "":
+        if _SCP_STYLE_RE.match(url):
+            raise InvalidRepoURLError(f"SCP-style git URLs are not allowed: {url!r}")
+        # A bare local filesystem path (used by tests against local fixture
+        # repos) never leaves the machine, so there is no SSRF surface to
         # allowlist against.
         return
     else:

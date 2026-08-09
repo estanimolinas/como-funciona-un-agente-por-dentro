@@ -51,3 +51,13 @@ def test_enforces_clone_timeout(fixture_repo: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(clone_module.subprocess, "run", _fake_run)
     with pytest.raises(CloneTimeoutError):
         clone_repo(str(fixture_repo))
+
+
+def test_rejects_scp_style_ssh_url():
+    with pytest.raises(InvalidRepoURLError):
+        clone_repo("git@evil-host.example:attacker/repo.git")
+
+
+def test_rejects_file_scheme():
+    with pytest.raises(InvalidRepoURLError):
+        clone_repo("file:///etc/passwd")
