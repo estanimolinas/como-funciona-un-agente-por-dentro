@@ -104,6 +104,37 @@ via writing-plans + subagent-driven-development, same as Plan 1):
    size/timeout caps — see spec's Security section for exact limits),
    tree-sitter parsing (Python only for v1), chunker (function/class-level
    + metadata).
+
+   **Brainstorming for Plan 2 started 2026-08-08, paused before writing the
+   spec doc.** Decisions reached so far (resume from here, don't re-derive):
+   - Module layout: `coderag_mcp/indexing/{clone.py, chunker.py, pipeline.py,
+     models.py}`. Pure function `index_repo(url) -> list[Chunk]` — no HTTP
+     endpoint and no DB yet (store is Plan 3).
+   - `Chunk` dataclass fields: repo_url, file_path, symbol_type
+     (function/class/method), symbol_name, start_line, end_line, signature,
+     source, parent_class.
+   - Chunking granularity: functions, classes, AND methods are each their
+     own chunk (not "whole class as one chunk") — finer-grained for
+     semantic search.
+   - Clone via `subprocess` + real `git clone --depth=1` (not GitPython).
+     Parse via `tree-sitter` + `tree-sitter-python` (official bindings, not
+     the `tree-sitter-languages` bundle — v1 is Python-only).
+   - Limits for this stage are hardcoded constants (not pydantic-settings
+     yet): ~200MB repo size cap, ~2min timeout for clone+parse specifically
+     (separate from the spec's ~5min, which also covers embeddings), ~500
+     `.py` file cap (hard error if exceeded).
+   - Per-file parse failures are non-fatal (log + skip); job-level failures
+     (bad host, timeout, size/file-count cap) raise explicit typed
+     exceptions.
+   - Tests run against a local git fixture repo (real `git init` + commits
+     in a tmp dir) — no network dependency in CI.
+   - Explicit standing instruction from the user (2026-08-08): every step
+     from here forward should be built toward real production use, not
+     throwaway/mock work. Doesn't change the spec's scope — reinforces the
+     spec's existing "production-readiness kept in v1" section.
+
+   Next action: write the spec doc to `docs/superpowers/specs/`, run the
+   spec self-review, get sign-off, then invoke `writing-plans`.
 3. Embeddings (Voyage `voyage-code-3`) + Postgres/pgvector store (HNSW
    index) + Alembic migrations.
 4. RAG endpoint: retrieval + Claude-generated answer with file:line
