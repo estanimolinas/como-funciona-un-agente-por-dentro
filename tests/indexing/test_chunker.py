@@ -45,3 +45,50 @@ def test_extracts_class_and_its_methods(fixture_repo: Path):
 def test_broken_syntax_file_returns_no_chunks_without_raising(fixture_repo: Path):
     chunks = chunk_file(fixture_repo / "broken.py", REPO_URL, "broken.py")
     assert chunks == []
+
+
+def test_extracts_decorated_function_and_method(tmp_path: Path):
+    source = '''\
+import functools
+
+
+@functools.lru_cache
+def cached_add(a: int, b: int) -> int:
+    """Add two numbers, cached."""
+    return a + b
+
+
+class Widget:
+    """A widget."""
+
+    @staticmethod
+    def make() -> "Widget":
+        """Factory method."""
+        return Widget()
+
+    @property
+    def label(self) -> str:
+        """Return the widget's label."""
+        return "widget"
+'''
+    py_file = tmp_path / "decorated.py"
+    py_file.write_text(source)
+
+    chunks = chunk_file(py_file, REPO_URL, "decorated.py")
+
+    names = {c.symbol_name for c in chunks}
+    assert names == {"cached_add", "Widget", "make", "label"}
+
+    cached_add_chunk = next(c for c in chunks if c.symbol_name == "cached_add")
+    assert cached_add_chunk.symbol_type == "function"
+    assert cached_add_chunk.signature == "def cached_add(a: int, b: int) -> int:"
+    assert "@functools.lru_cache" in cached_add_chunk.source
+
+    make_chunk = next(c for c in chunks if c.symbol_name == "make")
+    assert make_chunk.symbol_type == "method"
+    assert make_chunk.parent_class == "Widget"
+    assert "@staticmethod" in make_chunk.source
+
+    label_chunk = next(c for c in chunks if c.symbol_name == "label")
+    assert label_chunk.parent_class == "Widget"
+    assert "@property" in label_chunk.source
