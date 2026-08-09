@@ -47,15 +47,39 @@ def test_broken_syntax_file_returns_no_chunks_without_raising(fixture_repo: Path
     assert chunks == []
 
 
+def test_non_utf8_file_returns_no_chunks_without_raising(tmp_path: Path):
+    py_file = tmp_path / "bad_encoding.py"
+    py_file.write_bytes(b"def f():\n    x = '\xe9'\n    return x\n")
+
+    chunks = chunk_file(py_file, REPO_URL, "bad_encoding.py")
+    assert chunks == []
+
+
 def test_extracts_decorated_function_and_method(tmp_path: Path):
     source = '''\
 import functools
+from dataclasses import dataclass
 
 
 @functools.lru_cache
 def cached_add(a: int, b: int) -> int:
     """Add two numbers, cached."""
     return a + b
+
+
+@functools.wraps(cached_add)
+@functools.lru_cache
+def double_decorated(a: int) -> int:
+    """Has two stacked decorators."""
+    return a * 2
+
+
+@dataclass
+class Point:
+    """A simple point."""
+
+    x: int
+    y: int
 
 
 class Widget:
@@ -77,12 +101,27 @@ class Widget:
     chunks = chunk_file(py_file, REPO_URL, "decorated.py")
 
     names = {c.symbol_name for c in chunks}
-    assert names == {"cached_add", "Widget", "make", "label"}
+    assert names == {"cached_add", "double_decorated", "Point", "Widget", "make", "label"}
 
     cached_add_chunk = next(c for c in chunks if c.symbol_name == "cached_add")
     assert cached_add_chunk.symbol_type == "function"
     assert cached_add_chunk.signature == "def cached_add(a: int, b: int) -> int:"
     assert "@functools.lru_cache" in cached_add_chunk.source
+
+    double_decorated_chunk = next(c for c in chunks if c.symbol_name == "double_decorated")
+    assert double_decorated_chunk.symbol_type == "function"
+    assert "@functools.wraps(cached_add)" in double_decorated_chunk.source
+    assert "@functools.lru_cache" in double_decorated_chunk.source
+
+    point_chunk = next(c for c in chunks if c.symbol_name == "Point")
+    assert point_chunk.symbol_type == "class"
+    assert point_chunk.signature == "class Point:"
+    # Class chunks' start_line covers the decorator line (line numbers come
+    # from the outer decorated_definition node), even though the class
+    # chunk's `source` text itself is built from the class body only and
+    # does not repeat the decorator line — unlike function/method chunks,
+    # which do include their decorator(s) in `source`.
+    assert "@dataclass" not in point_chunk.source
 
     make_chunk = next(c for c in chunks if c.symbol_name == "make")
     assert make_chunk.symbol_type == "method"

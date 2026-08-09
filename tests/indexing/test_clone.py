@@ -27,7 +27,7 @@ def test_rejects_localhost():
 
 
 def test_clones_local_fixture_repo(fixture_repo: Path):
-    cloned_path = clone_repo(str(fixture_repo))
+    cloned_path = clone_repo(str(fixture_repo), allow_local_paths=True)
     try:
         assert cloned_path.is_dir()
         assert (cloned_path / "functions.py").exists()
@@ -41,7 +41,7 @@ def test_clones_local_fixture_repo(fixture_repo: Path):
 def test_enforces_size_cap(fixture_repo: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(clone_module, "MAX_REPO_SIZE_MB", 0)
     with pytest.raises(RepoTooLargeError):
-        clone_repo(str(fixture_repo))
+        clone_repo(str(fixture_repo), allow_local_paths=True)
 
 
 def test_enforces_clone_timeout(fixture_repo: Path, monkeypatch: pytest.MonkeyPatch):
@@ -50,7 +50,17 @@ def test_enforces_clone_timeout(fixture_repo: Path, monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(clone_module.subprocess, "run", _fake_run)
     with pytest.raises(CloneTimeoutError):
+        clone_repo(str(fixture_repo), allow_local_paths=True)
+
+
+def test_rejects_local_path_without_opt_in(fixture_repo: Path):
+    with pytest.raises(InvalidRepoURLError):
         clone_repo(str(fixture_repo))
+
+
+def test_rejects_dash_prefixed_url():
+    with pytest.raises(InvalidRepoURLError):
+        clone_repo("--upload-pack=touch /tmp/pwned")
 
 
 def test_rejects_scp_style_ssh_url():

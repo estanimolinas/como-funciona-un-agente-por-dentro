@@ -12,6 +12,7 @@ from coderag_mcp.indexing.models import Chunk
 logger = logging.getLogger(__name__)
 
 PY_LANGUAGE = Language(tspython.language())
+_PARSER = Parser(PY_LANGUAGE)
 
 
 def _node_text(node: Node, source: bytes) -> str:
@@ -47,7 +48,8 @@ def _function_chunk(
     def_node: The actual function_definition node, used for name and signature.
     """
     name_node = def_node.child_by_field_name("name")
-    assert name_node is not None
+    if name_node is None:
+        raise ValueError(f"function/method definition node has no 'name' child: {def_node!r}")
     def_source = _node_text(def_node, source)
     signature = def_source.split("\n", 1)[0].rstrip()
     full_source = _node_text(outer_node, source)
@@ -80,7 +82,8 @@ def _class_chunk(
     """
     name_node = def_node.child_by_field_name("name")
     body_node = def_node.child_by_field_name("body")
-    assert name_node is not None and body_node is not None
+    if name_node is None or body_node is None:
+        raise ValueError(f"class definition node missing 'name' or 'body' child: {def_node!r}")
 
     header = source[def_node.start_byte : body_node.start_byte].decode().rstrip()
     docstring = ""
@@ -108,31 +111,47 @@ def chunk_file(path: Path, repo_url: str, file_path: str) -> list[Chunk]:
     """Parse one .py file and return its function/class/method chunks.
 
     Returns an empty list (with a logged warning) if the file has syntax
-    errors — per-file failures never abort the overall indexing job.
+    errors, is not decodable as UTF-8, or fails to parse for any other
+    reason — per-file failures never abort the overall indexing job.
+
+    By design, only top-level functions/classes and one level of
+    class-body methods are walked: nested classes, methods of nested
+    classes, and functions nested inside other functions are not
+    extracted as their own chunks.
     """
-    source = path.read_bytes()
-    parser = Parser(PY_LANGUAGE)
-    tree = parser.parse(source)
+    try:
+        source = path.read_bytes()
+        tree = _PARSER.parse(source)
 
-    if tree.root_node.has_error:
-        logger.warning("skipping %s: syntax errors during parse", file_path)
+        if tree.root_node.has_error:
+            logger.warning("skipping %s: syntax errors during parse", file_path)
+            return []
+
+        chunks: list[Chunk] = []
+        for raw_node in tree.root_node.named_children:
+            node = _unwrap_decorated(raw_node)
+            if node is None:
+                continue
+            if node.type == "function_definition":
+                chunks.append(_function_chunk(raw_node, node, source, repo_url, file_path, None))
+            elif node.type == "class_definition":
+                chunks.append(_class_chunk(raw_node, node, source, repo_url, file_path))
+                class_name_node = node.child_by_field_name("name")
+                if class_name_node is None:
+                    raise ValueError(f"class definition node has no 'name' child: {node!r}")
+                class_name = _node_text(class_name_node, source)
+                body_node = node.child_by_field_name("body")
+                if body_node is None:
+                    raise ValueError(f"class definition node has no 'body' child: {node!r}")
+                for raw_child in body_node.named_children:
+                    child = _unwrap_decorated(raw_child)
+                    if child is not None and child.type == "function_definition":
+                        chunks.append(
+                            _function_chunk(
+                                raw_child, child, source, repo_url, file_path, class_name
+                            )
+                        )
+        return chunks
+    except Exception as exc:  # noqa: BLE001 - per-file failures must never raise
+        logger.warning("skipping %s: %s", file_path, exc)
         return []
-
-    chunks: list[Chunk] = []
-    for raw_node in tree.root_node.named_children:
-        node = _unwrap_decorated(raw_node)
-        if node is None:
-            continue
-        if node.type == "function_definition":
-            chunks.append(_function_chunk(raw_node, node, source, repo_url, file_path, None))
-        elif node.type == "class_definition":
-            chunks.append(_class_chunk(raw_node, node, source, repo_url, file_path))
-            class_name = _node_text(node.child_by_field_name("name"), source)
-            body_node = node.child_by_field_name("body")
-            for raw_child in body_node.named_children:
-                child = _unwrap_decorated(raw_child)
-                if child is not None and child.type == "function_definition":
-                    chunks.append(
-                        _function_chunk(raw_child, child, source, repo_url, file_path, class_name)
-                    )
-    return chunks
