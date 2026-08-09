@@ -45,9 +45,10 @@ service.
 
 ## Current status
 
-**Plan 1 of several — done, merged to `main`, 3 commits, 2/2 tests
+**Plans 1 and 2 of several — done, merged to `main`, 30/30 tests
 passing.** See `docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`
-(all steps checked off) for exactly what was built and how it was reviewed.
+and `docs/superpowers/plans/2026-08-08-indexing-pipeline.md` (all steps
+checked off) for exactly what was built and how each was reviewed.
 
 What exists right now:
 - `coderag_mcp/api/main.py` — FastAPI app, `/health` endpoint, MCP server
@@ -67,6 +68,46 @@ What exists right now:
   testing the real tools later — no shortcuts here, the whole point of
   this project's MCP layer is that it actually works against a real
   client.
+- `coderag_mcp/indexing/` (Plan 2 — clone → tree-sitter → chunk):
+  - `models.py` — `Chunk` dataclass and the `IndexingError` exception
+    hierarchy (`InvalidRepoURLError`, `CloneTimeoutError`,
+    `RepoTooLargeError`, `TooManyFilesError`, `PipelineTimeoutError`).
+  - `clone.py` — `clone_repo(url, *, allow_local_paths=False) -> Path` and
+    `cleanup_clone(cloned_path) -> None`. Validates host allowlist
+    (`github.com`/`gitlab.com`), rejects SCP-style git URLs, `file://`
+    URLs, and dash-prefixed URLs (git argument-injection defense — always
+    passes `--` before the URL to `git clone` too). `allow_local_paths` is
+    an explicit opt-in used only by tests against the local fixture repo —
+    keep it `False` by default when this is wired behind an HTTP/MCP
+    endpoint later, so a caller can never get local-file disclosure through
+    the indexing path.
+  - `chunker.py` — `chunk_file(path, repo_url, file_path) -> list[Chunk]`.
+    tree-sitter-python parse; extracts top-level functions, classes, and
+    each method inside a class as its own chunk. Unwraps
+    `decorated_definition` nodes so `@staticmethod`/`@property`/etc. don't
+    get silently dropped. Any per-file failure (syntax error, non-UTF-8
+    encoding, anything else) is caught internally, logged, and returns
+    `[]` for that file — never raises.
+  - `pipeline.py` — `index_repo(repo_url, *, allow_local_paths=False) ->
+    list[Chunk]`, the sole public entry point for this plan: clone → walk
+    `.py` files (capped at `MAX_FILE_COUNT=500`) → chunk each (wrapped in
+    its own defensive try/except as a second safety net) → clean up via
+    `clone.cleanup_clone`. No HTTP endpoint, no DB, no embeddings yet —
+    Plan 3 calls this function directly.
+  - Tests in `tests/indexing/` run against a real local git repo built by
+    the `fixture_repo` fixture in `conftest.py` (`git init` + a commit) —
+    zero network dependency.
+
+  **Two rounds of security hardening happened during Plan 2's review loop,
+  beyond what the original plan text specified — don't reintroduce these:**
+  the host-allowlist bypass via SCP-style URLs (`user@host:path` and bare
+  `host:path`, git's own remote syntax) and unconditional `file://`
+  pass-through; and a git argument-injection bypass via dash-prefixed URLs
+  reaching `git clone` in option position (fixed with both an app-level
+  reject-leading-dash check and a `--` separator before the URL,
+  belt-and-suspenders). Both were caught by the review loop, not written
+  correctly the first time — a sign the review discipline is doing its job,
+  not that the code is now bulletproof against every future finding.
 
 **Important gotcha already paid for — don't rediscover it:** the `mcp`
 Python SDK installed here is **2.0.0**, which has a completely different
@@ -97,52 +138,37 @@ current — they may describe the older `FastMCP`-based API.
 ## What comes next
 
 Per the design doc's Build Order, in this sequence (each gets its own plan
-via writing-plans + subagent-driven-development, same as Plan 1):
+via writing-plans + subagent-driven-development, same as Plans 1-2):
 
-1. ~~MCP server spike~~ — done (this is Plan 1).
-2. Indexing pipeline: repo cloning (host allowlist, shallow clone,
-   size/timeout caps — see spec's Security section for exact limits),
-   tree-sitter parsing (Python only for v1), chunker (function/class-level
-   + metadata).
-
-   **Brainstorming for Plan 2 started 2026-08-08, paused before writing the
-   spec doc.** Decisions reached so far (resume from here, don't re-derive):
-   - Module layout: `coderag_mcp/indexing/{clone.py, chunker.py, pipeline.py,
-     models.py}`. Pure function `index_repo(url) -> list[Chunk]` — no HTTP
-     endpoint and no DB yet (store is Plan 3).
-   - `Chunk` dataclass fields: repo_url, file_path, symbol_type
-     (function/class/method), symbol_name, start_line, end_line, signature,
-     source, parent_class.
-   - Chunking granularity: functions, classes, AND methods are each their
-     own chunk (not "whole class as one chunk") — finer-grained for
-     semantic search.
-   - Clone via `subprocess` + real `git clone --depth=1` (not GitPython).
-     Parse via `tree-sitter` + `tree-sitter-python` (official bindings, not
-     the `tree-sitter-languages` bundle — v1 is Python-only).
-   - Limits for this stage are hardcoded constants (not pydantic-settings
-     yet): ~200MB repo size cap, ~2min timeout for clone+parse specifically
-     (separate from the spec's ~5min, which also covers embeddings), ~500
-     `.py` file cap (hard error if exceeded).
-   - Per-file parse failures are non-fatal (log + skip); job-level failures
-     (bad host, timeout, size/file-count cap) raise explicit typed
-     exceptions.
-   - Tests run against a local git fixture repo (real `git init` + commits
-     in a tmp dir) — no network dependency in CI.
-   - Explicit standing instruction from the user (2026-08-08): every step
-     from here forward should be built toward real production use, not
-     throwaway/mock work. Doesn't change the spec's scope — reinforces the
-     spec's existing "production-readiness kept in v1" section.
-
-   Next action: write the spec doc to `docs/superpowers/specs/`, run the
-   spec self-review, get sign-off, then invoke `writing-plans`.
+1. ~~MCP server spike~~ — done (Plan 1).
+2. ~~Indexing pipeline~~ — done (Plan 2). See
+   `docs/superpowers/specs/2026-08-08-indexing-pipeline-design.md` for the
+   design and `docs/superpowers/plans/2026-08-08-indexing-pipeline.md` for
+   the implementation plan (all 5 tasks + the final-review fix wave
+   checked off).
 3. Embeddings (Voyage `voyage-code-3`) + Postgres/pgvector store (HNSW
-   index) + Alembic migrations.
+   index) + Alembic migrations. Recommended distance metric: cosine
+   similarity (pgvector `<=>` operator, HNSW index with
+   `vector_cosine_ops`) — `voyage-code-3` embeddings are meant to be
+   compared this way, not with Euclidean distance. Consumes
+   `coderag_mcp.indexing.pipeline.index_repo()`'s `list[Chunk]` output
+   directly.
 4. RAG endpoint: retrieval + Claude-generated answer with file:line
    citations.
 5. Wire the real MCP tools (`index_repo`, `search_code`, `ask_repo`) onto
    the `mcp` object in `mcp_server/server.py` — the mounting/lifespan code
-   in `api/main.py` should not need changes for this.
+   in `api/main.py` should not need changes for this. **When wiring
+   `index_repo` behind HTTP/MCP, do not pass `allow_local_paths=True`** —
+   that flag exists solely for Plan 2's own tests against a local fixture
+   repo; a real endpoint must only ever accept `github.com`/`gitlab.com`
+   URLs.
 6. Auth (API key), remaining production-readiness pieces from the spec.
+   This is also the natural point to promote Plan 2's hardcoded indexing
+   constants (`ALLOWED_HOSTS`, `MAX_REPO_SIZE_MB`, `CLONE_TIMEOUT_S`,
+   `MAX_FILE_COUNT`, `PIPELINE_TIMEOUT_S`) to `pydantic-settings`, and to
+   revisit the pre-clone size mitigation (currently a
+   `--filter=blob:limit=<n>` partial-clone flag plus a post-clone aggregate
+   check — no true streaming/disk-quota enforcement yet).
 7. Minimal React+Vite+TypeScript frontend (separate plan, deliberately
    deferred — this repo is backend-first).
 8. Deploy (Render + Supabase + Vercel per the spec) + polish the README
