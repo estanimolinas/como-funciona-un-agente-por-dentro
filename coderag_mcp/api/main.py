@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from coderag_mcp.api.ask_route import router as ask_router
 from coderag_mcp.config import get_settings
 from coderag_mcp.mcp_server.server import mcp
 
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CodeRAG-MCP", lifespan=lifespan)
 app.mount("/mcp", mcp_app)
+app.include_router(ask_router)
 
 
 @app.get("/health")

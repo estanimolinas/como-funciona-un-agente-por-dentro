@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_name: str = "coderag-mcp"
     public_host: str = "127.0.0.1"
     voyage_api_key: str = ""
+    sqlite_db_path: str = "coderag.db"
 
 
 def get_settings() -> Settings:
