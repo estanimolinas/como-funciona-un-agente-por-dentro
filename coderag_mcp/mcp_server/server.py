@@ -19,6 +19,7 @@ parameter and `ctx.request_context.lifespan_context.conn`.
 """
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -76,11 +77,10 @@ async def search_code(repo_url: str, query: str, ctx: Context, top_k: int = 5) -
     conn = ctx.request_context.lifespan_context.conn
     repo_id = await run_db_sync(index_and_store_repo, conn, repo_url)
 
-    def _search():
-        query_embedding = embed_batch([query], input_type="query")[0]
-        return search_chunks(conn, repo_id, query_embedding, top_k=top_k)
-
-    results = await run_db_sync(_search)
+    query_embedding = (
+        await asyncio.to_thread(embed_batch, [query], input_type="query")
+    )[0]
+    results = await run_db_sync(search_chunks, conn, repo_id, query_embedding, top_k)
     if not results:
         return "No matches found."
     return "\n\n".join(
