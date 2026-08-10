@@ -16,10 +16,23 @@ def index_and_store_repo(conn: sqlite3.Connection, repo_url: str) -> int:
         return existing_id
 
     extracted = index_repo(repo_url, allow_local_paths=False)
-    repo_id = repo_store.create_repo(conn, repo_url)
 
+    # Embed chunks if any exist (before creating repo, so embedding failures don't poison the DB)
+    embeddings = None
     if extracted:
         embeddings = embed_batch([chunk.source for chunk in extracted])
+
+    # Create repo only after embedding succeeds. If concurrent call creates it first,
+    # catch the integrity error and look it up instead.
+    try:
+        repo_id = repo_store.create_repo(conn, repo_url)
+    except sqlite3.IntegrityError:
+        # Concurrent call created the row; look it up instead of propagating
+        repo_id = repo_store.get_repo_id_by_url(conn, repo_url)
+        assert repo_id is not None
+
+    # Insert chunks if any exist
+    if extracted:
         chunk_store.insert_chunks(conn, repo_id, extracted, embeddings)
 
     return repo_id
