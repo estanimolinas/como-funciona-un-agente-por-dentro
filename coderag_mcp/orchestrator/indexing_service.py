@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import apsw
+
 from coderag_mcp.embeddings.voyage import embed_batch
 from coderag_mcp.indexing.pipeline import index_repo
 from coderag_mcp.store import chunks as chunk_store
@@ -22,17 +24,27 @@ def index_and_store_repo(conn: sqlite3.Connection, repo_url: str) -> int:
     if extracted:
         embeddings = embed_batch([chunk.source for chunk in extracted])
 
-    # Create repo only after embedding succeeds. If concurrent call creates it first,
-    # catch the integrity error and look it up instead.
+    # Wrap both repo creation and chunk insertion in a transaction so that
+    # if either fails, the entire operation is rolled back with no poisoned rows.
+    conn.begin()
     try:
-        repo_id = repo_store.create_repo(conn, repo_url)
-    except sqlite3.IntegrityError:
-        # Concurrent call created the row; look it up instead of propagating
-        repo_id = repo_store.get_repo_id_by_url(conn, repo_url)
-        assert repo_id is not None
+        # Create repo (or fall back to concurrent winner if race occurs)
+        try:
+            repo_id = repo_store.create_repo(conn, repo_url)
+        except apsw.ConstraintError:
+            # Concurrent call created the row; roll back this attempt and look it up
+            conn.rollback()
+            repo_id = repo_store.get_repo_id_by_url(conn, repo_url)
+            assert repo_id is not None
+            return repo_id
 
-    # Insert chunks if any exist
-    if extracted:
-        chunk_store.insert_chunks(conn, repo_id, extracted, embeddings)
+        # Insert chunks if any exist (within the same transaction)
+        if extracted:
+            chunk_store.insert_chunks(conn, repo_id, extracted, embeddings)
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
     return repo_id

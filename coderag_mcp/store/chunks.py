@@ -36,7 +36,11 @@ def insert_chunks(
     # Wrap the entire operation in a transaction so a failure mid-loop
     # rolls back all changes (including any chunks already inserted).
     # This preserves idempotency: a failed call leaves the DB as it was before.
-    conn.begin()
+    # If a transaction is already active (e.g., called from a larger operation),
+    # only manage the transaction if we started it.
+    should_manage_transaction = not conn._conn.in_transaction
+    if should_manage_transaction:
+        conn.begin()
     try:
         for chunk, embedding in zip(chunks, embeddings):
             cursor = conn.execute(
@@ -62,9 +66,11 @@ def insert_chunks(
                 "INSERT INTO chunk_vectors (chunk_id, repo_id, embedding) VALUES (?, ?, ?)",
                 (cursor.lastrowid, repo_id, _serialize(embedding)),
             )
-        conn.commit()
+        if should_manage_transaction:
+            conn.commit()
     except Exception:
-        conn.rollback()
+        if should_manage_transaction:
+            conn.rollback()
         raise
 
 
