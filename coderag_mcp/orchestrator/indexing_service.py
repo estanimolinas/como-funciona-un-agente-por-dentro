@@ -25,16 +25,19 @@ def index_and_store_repo(conn: sqlite3.Connection, repo_url: str) -> int:
     if extracted:
         embeddings = embed_batch([chunk.source for chunk in extracted])
 
-    try:
-        with transaction(conn):
+    with transaction(conn):
+        try:
             repo_id = repo_store.create_repo(conn, repo_url)
-            if extracted:
-                chunk_store.insert_chunks(conn, repo_id, extracted, embeddings)
-    except apsw.ConstraintError:
-        # Concurrent call created the row first; transaction() already rolled back
-        # this attempt - look up the winner's repo_id instead.
-        repo_id = repo_store.get_repo_id_by_url(conn, repo_url)
-        assert repo_id is not None
-        return repo_id
+        except apsw.ConstraintError:
+            # Concurrent call created the row first - look up the winner's repo_id
+            # instead. Only create_repo's ConstraintError is reinterpreted this way;
+            # a ConstraintError from insert_chunks (below) is a real, unrelated
+            # failure and must propagate normally via the `with transaction(conn):`
+            # block's own exception handling (which rolls back and re-raises).
+            repo_id = repo_store.get_repo_id_by_url(conn, repo_url)
+            assert repo_id is not None
+            return repo_id
+        if extracted:
+            chunk_store.insert_chunks(conn, repo_id, extracted, embeddings)
 
     return repo_id

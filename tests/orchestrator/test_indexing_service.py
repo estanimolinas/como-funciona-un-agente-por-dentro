@@ -116,6 +116,36 @@ def test_no_repos_row_created_if_insert_chunks_raises(tmp_path):
     assert repo_store.get_repo_id_by_url(conn, "https://github.com/a/b") is None
 
 
+def test_insert_chunks_constraint_error_propagates_not_swallowed(tmp_path):
+    """An apsw.ConstraintError from insert_chunks must NOT be reinterpreted as
+    the repo-URL race (which only create_repo's ConstraintError signals). It
+    must propagate as a real failure, and no repos row should be left behind.
+    """
+    conn = get_connection(str(tmp_path / "test.db"))
+    init_schema(conn, dim=4)
+
+    with (
+        patch(
+            "coderag_mcp.orchestrator.indexing_service.index_repo",
+            return_value=[_chunk()],
+        ),
+        patch(
+            "coderag_mcp.orchestrator.indexing_service.embed_batch",
+            return_value=[[1.0, 0.0, 0.0, 0.0]],
+        ),
+        patch(
+            "coderag_mcp.orchestrator.indexing_service.chunk_store.insert_chunks",
+            side_effect=apsw.ConstraintError("chunk_id uniqueness violation"),
+        ),
+    ):
+        with pytest.raises(apsw.ConstraintError):
+            index_and_store_repo(conn, "https://github.com/a/b")
+
+    # Assert no poisoned row created (transaction was rolled back, not
+    # silently reinterpreted as a race the repo-URL race already won).
+    assert repo_store.get_repo_id_by_url(conn, "https://github.com/a/b") is None
+
+
 def test_real_unique_constraint_raises_apsw_constraint_error(tmp_path):
     """Verify that the REAL driver raises apsw.ConstraintError on UNIQUE violation."""
     conn = get_connection(str(tmp_path / "test.db"))
