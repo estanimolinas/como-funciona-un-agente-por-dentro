@@ -7,11 +7,8 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
+from coderag_mcp.config import get_settings
 from coderag_mcp.indexing.models import CloneTimeoutError, InvalidRepoURLError, RepoTooLargeError
-
-ALLOWED_HOSTS = {"github.com", "gitlab.com"}
-MAX_REPO_SIZE_MB = 200
-CLONE_TIMEOUT_S = 60
 
 
 def _looks_like_scp_style(url: str) -> bool:
@@ -25,13 +22,13 @@ def _looks_like_scp_style(url: str) -> bool:
     return slash_index == -1 or colon_index < slash_index
 
 
-def _validate_url(url: str, *, allow_local_paths: bool) -> None:
+def _validate_url(url: str, *, allow_local_paths: bool, allowed_hosts: list[str]) -> None:
     if url.startswith("-"):
         raise InvalidRepoURLError(f"URL must not start with '-': {url!r}")
 
     parsed = urlparse(url)
     if parsed.scheme in ("http", "https"):
-        if parsed.hostname not in ALLOWED_HOSTS:
+        if parsed.hostname not in allowed_hosts:
             raise InvalidRepoURLError(f"host not allowed: {parsed.hostname!r}")
     elif parsed.scheme == "":
         if _looks_like_scp_style(url):
@@ -64,7 +61,8 @@ def clone_repo(url: str, *, allow_local_paths: bool = False) -> Path:
     Raises ``InvalidRepoURLError``, ``CloneTimeoutError``, or ``RepoTooLargeError``
     on failure. The caller owns cleanup via ``cleanup_clone``.
     """
-    _validate_url(url, allow_local_paths=allow_local_paths)
+    settings = get_settings()
+    _validate_url(url, allow_local_paths=allow_local_paths, allowed_hosts=settings.allowed_hosts)
 
     tmpdir = Path(tempfile.mkdtemp(prefix="coderag-clone-"))
     dest = tmpdir / "repo"
@@ -75,27 +73,27 @@ def clone_repo(url: str, *, allow_local_paths: bool = False) -> Path:
                 "git",
                 "clone",
                 "--depth=1",
-                f"--filter=blob:limit={MAX_REPO_SIZE_MB}m",
+                f"--filter=blob:limit={settings.max_repo_size_mb}m",
                 "--",
                 url,
                 str(dest),
             ],
             check=True,
             capture_output=True,
-            timeout=CLONE_TIMEOUT_S,
+            timeout=settings.clone_timeout_s,
         )
     except subprocess.TimeoutExpired as exc:
         shutil.rmtree(tmpdir, ignore_errors=True)
-        raise CloneTimeoutError(f"clone of {url!r} exceeded {CLONE_TIMEOUT_S}s") from exc
+        raise CloneTimeoutError(f"clone of {url!r} exceeded {settings.clone_timeout_s}s") from exc
     except subprocess.CalledProcessError as exc:
         shutil.rmtree(tmpdir, ignore_errors=True)
         stderr = exc.stderr.decode(errors="replace") if exc.stderr else ""
         raise InvalidRepoURLError(f"git clone failed for {url!r}: {stderr}") from exc
 
     size_mb = _dir_size_mb(dest)
-    if size_mb > MAX_REPO_SIZE_MB:
+    if size_mb > settings.max_repo_size_mb:
         shutil.rmtree(tmpdir, ignore_errors=True)
-        raise RepoTooLargeError(f"{url!r} is {size_mb:.1f}MB, exceeds {MAX_REPO_SIZE_MB}MB cap")
+        raise RepoTooLargeError(f"{url!r} is {size_mb:.1f}MB, exceeds {settings.max_repo_size_mb}MB cap")
 
     return dest
 

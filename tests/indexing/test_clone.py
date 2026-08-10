@@ -39,7 +39,11 @@ def test_clones_local_fixture_repo(fixture_repo: Path):
 
 
 def test_enforces_size_cap(fixture_repo: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(clone_module, "MAX_REPO_SIZE_MB", 0)
+    from coderag_mcp.config import Settings
+
+    monkeypatch.setattr(
+        clone_module, "get_settings", lambda: Settings(max_repo_size_mb=0)
+    )
     with pytest.raises(RepoTooLargeError):
         clone_repo(str(fixture_repo), allow_local_paths=True)
 

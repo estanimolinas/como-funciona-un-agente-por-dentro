@@ -38,12 +38,18 @@ def test_index_repo_cleans_up_temp_dir(fixture_repo: Path):
 
 
 def test_index_repo_enforces_file_count_cap(fixture_repo: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(pipeline_module, "MAX_FILE_COUNT", 1)
+    from coderag_mcp.config import Settings
+
+    monkeypatch.setattr(pipeline_module, "get_settings", lambda: Settings(max_file_count=1))
     with pytest.raises(TooManyFilesError):
         index_repo(str(fixture_repo), allow_local_paths=True)
 
 
 def test_index_repo_enforces_pipeline_timeout(fixture_repo: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(pipeline_module, "PIPELINE_TIMEOUT_S", -1)
+    from coderag_mcp.config import Settings
+
+    monkeypatch.setattr(
+        pipeline_module, "get_settings", lambda: Settings(pipeline_timeout_s=-1)
+    )
     with pytest.raises(PipelineTimeoutError):
         index_repo(str(fixture_repo), allow_local_paths=True)
