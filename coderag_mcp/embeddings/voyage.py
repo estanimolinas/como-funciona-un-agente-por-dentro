@@ -7,6 +7,16 @@ from coderag_mcp.config import get_settings
 
 MODEL = "voyage-code-3"
 
+_client: voyageai.Client | None = None
+
+
+def _get_client() -> voyageai.Client:
+    global _client
+    if _client is None:
+        settings = get_settings()
+        _client = voyageai.Client(api_key=settings.voyage_api_key)
+    return _client
+
 
 def embed_batch(texts: list[str], *, input_type: str = "document") -> list[list[float]]:
     """Embed texts with voyage-code-3.
@@ -16,7 +26,6 @@ def embed_batch(texts: list[str], *, input_type: str = "document") -> list[list[
     input_type="query" when embedding a search query - using the wrong side degrades
     retrieval quality without raising any error.
     """
-    settings = get_settings()
-    client = voyageai.Client(api_key=settings.voyage_api_key)
+    client = _get_client()
     result = client.embed(texts, model=MODEL, input_type=input_type)
     return result.embeddings

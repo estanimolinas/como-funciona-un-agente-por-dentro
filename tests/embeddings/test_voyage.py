@@ -30,3 +30,14 @@ def test_embed_batch_uses_query_input_type_when_requested():
             model="voyage-code-3",
             input_type="query",
         )
+
+
+def test_embed_batch_reuses_client_across_calls():
+    fake_result = MagicMock(embeddings=[[0.1, 0.2]])
+    with patch("coderag_mcp.embeddings.voyage.voyageai.Client") as mock_client_cls:
+        mock_client_cls.return_value.embed.return_value = fake_result
+
+        embed_batch(["a"], input_type="document")
+        embed_batch(["b"], input_type="document")
+
+        mock_client_cls.assert_called_once()
