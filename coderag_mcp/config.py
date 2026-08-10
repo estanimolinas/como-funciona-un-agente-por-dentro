@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     public_host: str = "127.0.0.1"
     voyage_api_key: str = ""
     sqlite_db_path: str = "coderag.db"
+    coderag_api_key: str = ""
     allowed_hosts: list[str] = ["github.com", "gitlab.com"]
     max_repo_size_mb: int = 200
     clone_timeout_s: int = 60

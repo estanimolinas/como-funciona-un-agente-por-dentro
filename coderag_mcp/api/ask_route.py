@@ -5,6 +5,7 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from coderag_mcp.api.auth import require_api_key
 from coderag_mcp.api.deps import get_db_conn
 from coderag_mcp.api.schemas import AskRequest, AskResponse
 from coderag_mcp.indexing.models import IndexingError
@@ -15,7 +16,7 @@ from coderag_mcp.store.db import run_db_sync
 router = APIRouter()
 
 
-@router.post("/ask", response_model=AskResponse)
+@router.post("/ask", response_model=AskResponse, dependencies=[Depends(require_api_key)])
 async def ask_endpoint(
     request: AskRequest, conn: sqlite3.Connection = Depends(get_db_conn)
 ) -> AskResponse:
