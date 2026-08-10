@@ -326,14 +326,6 @@ current — they may describe the older `FastMCP`-based API.
   still round-trips to Voyage synchronously inside whatever thread called
   it — fine given the current `asyncio.to_thread` offload pattern, just
   noting there's no batching/retry/backoff logic yet.
-- The "only manage the transaction if I own it" pattern (`not
-  conn._conn.in_transaction`) is hand-duplicated across `store/chunks.py`,
-  `store/repos.py`, and `orchestrator/indexing_service.py`, reaching into
-  the `_APSWWrapper`'s private `_conn` from two different modules. A
-  shared `transaction(conn)` helper (already exists in `store/db.py` and is
-  used by `indexing_service.py`) and a public `in_transaction` property on
-  `_APSWWrapper` would collapse the remaining duplication in `chunks.py`/
-  `repos.py`.
 - `_mcp_compat.py`'s monkeypatch (see above) and `get_connection()`'s
   `-> sqlite3.Connection` type hint (the real contract needs
   `_APSWWrapper`'s `.begin()`) are both documented-but-real landmines for
@@ -355,9 +347,8 @@ above). Remaining, roughly in priority order:
    polish the README (architecture diagram, demo GIF, live URL,
    design-decisions section) + ADRs.
 3. Any of the "Known deferred items" above worth addressing before a
-   public demo — none are blocking, but the `transaction()`-duplication
-   cleanup and the repo-size streaming enforcement are the two most likely
-   to matter under real load.
+   public demo — none are blocking, but the repo-size streaming enforcement
+   is the most likely to matter under real load.
 
 ## How to work in this repo
 
