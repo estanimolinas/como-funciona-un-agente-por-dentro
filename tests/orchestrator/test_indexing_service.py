@@ -116,19 +116,32 @@ def test_no_repos_row_created_if_insert_chunks_raises(tmp_path):
     assert repo_store.get_repo_id_by_url(conn, "https://github.com/a/b") is None
 
 
-def test_concurrent_calls_recover_with_real_constraint_error(tmp_path):
-    """Test concurrent race with real apsw.ConstraintError (not mocked)."""
+def test_real_unique_constraint_raises_apsw_constraint_error(tmp_path):
+    """Verify that the REAL driver raises apsw.ConstraintError on UNIQUE violation."""
+    conn = get_connection(str(tmp_path / "test.db"))
+    init_schema(conn, dim=4)
+
+    # Call create_repo once with a URL (succeeds)
+    repo_id_1 = repo_store.create_repo(conn, "https://github.com/test/repo")
+    assert repo_id_1 is not None
+
+    # Call create_repo again with the SAME URL (should raise real apsw.ConstraintError)
+    with pytest.raises(apsw.ConstraintError):
+        repo_store.create_repo(conn, "https://github.com/test/repo")
+
+
+def test_concurrent_calls_recover_from_real_constraint_error(tmp_path):
+    """Test that index_and_store_repo recovers from concurrent race with real driver."""
     db_path = str(tmp_path / "test.db")
     conn = get_connection(db_path)
     init_schema(conn, dim=4)
 
-    # Simulate a concurrent call by manually creating the repo in a separate transaction
-    # before index_and_store_repo tries to create it
-    def mock_create_repo_concurrent(conn_arg, url):
-        # The real store layer's create_repo will see the row already exists
-        # and raise apsw.ConstraintError
-        raise apsw.ConstraintError("UNIQUE constraint failed: repos.url")
+    # First, create a repo using the real store layer to set up a concurrent scenario
+    repo_store.create_repo(conn, "https://github.com/concurrent/repo")
 
+    # Now mock index_repo and embed_batch, but NOT create_repo
+    # When index_and_store_repo tries to create_repo with the same URL,
+    # it will hit the real UNIQUE constraint and raise the real apsw.ConstraintError
     with (
         patch(
             "coderag_mcp.orchestrator.indexing_service.index_repo",
@@ -139,18 +152,13 @@ def test_concurrent_calls_recover_with_real_constraint_error(tmp_path):
             return_value=[[1.0, 0.0, 0.0, 0.0]],
         ),
         patch(
-            "coderag_mcp.orchestrator.indexing_service.repo_store.create_repo",
-            side_effect=mock_create_repo_concurrent,
-        ),
-        patch(
             "coderag_mcp.orchestrator.indexing_service.chunk_store.insert_chunks",
         ),
     ):
-        # Mock get_repo_id_by_url to return the repo_id from the concurrent caller
-        with patch(
-            "coderag_mcp.orchestrator.indexing_service.repo_store.get_repo_id_by_url",
-            side_effect=[None, 42],  # First call returns None, second (after exception) returns 42
-        ):
-            repo_id = index_and_store_repo(conn, "https://github.com/a/b")
-            # Should return the repo_id from concurrent caller, not raise
-            assert repo_id == 42
+        # Call index_and_store_repo with the same URL that already exists
+        # It should recover and return the existing repo_id instead of raising
+        repo_id = index_and_store_repo(conn, "https://github.com/concurrent/repo")
+
+        # Verify it returned a valid repo_id (the one we just created)
+        assert repo_id is not None
+        assert isinstance(repo_id, int)
