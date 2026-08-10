@@ -321,7 +321,6 @@ current — they may describe the older `FastMCP`-based API.
 - `tests/test_mcp_server.py`'s server-thread teardown doesn't assert the
   thread actually stopped; `TEST_PORT` is hardcoded (8765) and would
   collide under parallel test execution (e.g. `pytest-xdist`).
-- No `LICENSE` file, no CI yet.
 - `embeddings/voyage.py`'s `embed_batch` constructs the client lazily but
   still round-trips to Voyage synchronously inside whatever thread called
   it — fine given the current `asyncio.to_thread` offload pattern, just
