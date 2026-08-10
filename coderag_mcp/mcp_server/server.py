@@ -28,6 +28,7 @@ from mcp.server.mcpserver import Context, MCPServer
 
 from coderag_mcp.config import get_settings
 from coderag_mcp.indexing.models import IndexingError
+from coderag_mcp.logging_config import configure_logging
 from coderag_mcp.orchestrator.ask import ask as run_ask
 from coderag_mcp.orchestrator.indexing_service import index_and_store_repo_async
 from coderag_mcp.orchestrator.search_service import search_and_format
@@ -41,6 +42,7 @@ class AppContext:
 
 @asynccontextmanager
 async def _lifespan(server: MCPServer) -> AsyncIterator[AppContext]:
+    configure_logging()
     settings = get_settings()
     conn = get_connection(settings.sqlite_db_path)
     init_schema(conn)

@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from coderag_mcp.api.ask_route import router as ask_router
 from coderag_mcp.api.auth import ApiKeyMiddleware
 from coderag_mcp.config import get_settings
+from coderag_mcp.logging_config import configure_logging
 from coderag_mcp.mcp_server.server import mcp
 from coderag_mcp.store.db import get_connection, init_schema
 
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
     same as `mcp_server/server.py`'s `_lifespan` already does - `get_settings()`
     is `@lru_cache`d, so this doesn't add repeated file I/O.
     """
+    configure_logging()
     settings = get_settings()
 
     # mcp.streamable_http_app() mutates the shared, module-level `mcp` object's
