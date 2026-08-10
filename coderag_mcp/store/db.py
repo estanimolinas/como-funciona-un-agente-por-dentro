@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Iterator
 
 import apsw
 
@@ -80,6 +81,11 @@ class _APSWWrapper:
         """Close the connection."""
         self._conn.close()
 
+    @property
+    def in_transaction(self) -> bool:
+        """True if a transaction is currently active on this connection."""
+        return self._conn.in_transaction
+
 
 class _CursorWrapper:
     """Wrapper around apsw.Cursor to provide sqlite3-compatible interface."""
@@ -121,6 +127,31 @@ class _CursorWrapper:
     def lastrowid(self) -> int | None:
         """Get the last inserted row ID."""
         return self._conn.last_insert_rowid()
+
+
+@contextmanager
+def transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    """Run a block atomically, committing on success and rolling back on exception.
+
+    If a transaction is already active on ``conn`` (e.g. this is a nested call from
+    a caller that already opened one), this is a no-op wrapper: it neither begins nor
+    commits/rolls back - only the outermost ``transaction()`` call for a given
+    connection owns the transaction's lifecycle. This lets store-layer functions
+    (``create_repo``, ``insert_chunks``) be called either standalone or as part of a
+    larger caller-managed transaction (``index_and_store_repo``) without duplicating
+    "am I the owner?" logic at each call site.
+    """
+    owns_transaction = not conn.in_transaction
+    if owns_transaction:
+        conn.begin()
+    try:
+        yield
+        if owns_transaction:
+            conn.commit()
+    except Exception:
+        if owns_transaction:
+            conn.rollback()
+        raise
 
 
 def get_connection(db_path: str) -> sqlite3.Connection:

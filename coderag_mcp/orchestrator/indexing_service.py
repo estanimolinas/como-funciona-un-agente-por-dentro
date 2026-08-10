@@ -9,6 +9,7 @@ from coderag_mcp.embeddings.voyage import embed_batch
 from coderag_mcp.indexing.pipeline import index_repo
 from coderag_mcp.store import chunks as chunk_store
 from coderag_mcp.store import repos as repo_store
+from coderag_mcp.store.db import transaction
 
 
 def index_and_store_repo(conn: sqlite3.Connection, repo_url: str) -> int:
@@ -24,27 +25,16 @@ def index_and_store_repo(conn: sqlite3.Connection, repo_url: str) -> int:
     if extracted:
         embeddings = embed_batch([chunk.source for chunk in extracted])
 
-    # Wrap both repo creation and chunk insertion in a transaction so that
-    # if either fails, the entire operation is rolled back with no poisoned rows.
-    conn.begin()
     try:
-        # Create repo (or fall back to concurrent winner if race occurs)
-        try:
+        with transaction(conn):
             repo_id = repo_store.create_repo(conn, repo_url)
-        except apsw.ConstraintError:
-            # Concurrent call created the row; roll back this attempt and look it up
-            conn.rollback()
-            repo_id = repo_store.get_repo_id_by_url(conn, repo_url)
-            assert repo_id is not None
-            return repo_id
-
-        # Insert chunks if any exist (within the same transaction)
-        if extracted:
-            chunk_store.insert_chunks(conn, repo_id, extracted, embeddings)
-
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
+            if extracted:
+                chunk_store.insert_chunks(conn, repo_id, extracted, embeddings)
+    except apsw.ConstraintError:
+        # Concurrent call created the row first; transaction() already rolled back
+        # this attempt - look up the winner's repo_id instead.
+        repo_id = repo_store.get_repo_id_by_url(conn, repo_url)
+        assert repo_id is not None
+        return repo_id
 
     return repo_id
