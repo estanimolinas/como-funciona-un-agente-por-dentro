@@ -50,6 +50,23 @@ class Settings(BaseSettings):
         return v
 
 
+def validate_settings(settings: Settings) -> None:
+    """Raise RuntimeError with an actionable message if a required setting is
+    missing. Called once at startup by both api/main.py's create_app() and
+    mcp_server/server.py's _lifespan - fails fast rather than accepting requests
+    and failing confusingly on the first real Voyage call.
+
+    CODERAG_API_KEY is intentionally NOT validated here: empty/unset is a
+    supported dev-mode value (see api/auth.py's validate_api_key), not a
+    misconfiguration.
+    """
+    if not settings.voyage_api_key:
+        raise RuntimeError(
+            "VOYAGE_API_KEY is required - set it in .env or the environment. "
+            "See README.md's Quickstart."
+        )
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

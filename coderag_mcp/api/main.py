@@ -22,7 +22,7 @@ from fastapi import FastAPI
 
 from coderag_mcp.api.ask_route import router as ask_router
 from coderag_mcp.api.auth import ApiKeyMiddleware
-from coderag_mcp.config import get_settings
+from coderag_mcp.config import get_settings, validate_settings
 from coderag_mcp.logging_config import configure_logging
 from coderag_mcp.mcp_server.server import mcp
 from coderag_mcp.store.db import get_connection, init_schema
@@ -46,6 +46,7 @@ def create_app() -> FastAPI:
     """
     configure_logging()
     settings = get_settings()
+    validate_settings(settings)
 
     # mcp.streamable_http_app() mutates the shared, module-level `mcp` object's
     # internal `_session_manager` attribute as a side effect (per the installed
