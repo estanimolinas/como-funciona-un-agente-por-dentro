@@ -1,5 +1,9 @@
-"""The search_code custom tool, exposed to the rag-search subagent as an in-process
-MCP server per the Claude Agent SDK's custom-tool mechanism.
+"""The search_code custom tool, exposed to the single-agent orchestrator (see
+orchestrator/ask.py) as an in-process MCP server per the Claude Agent SDK's
+custom-tool mechanism. The actual embed-search-format logic lives in
+orchestrator/search_service.py's `search_and_format`, shared with
+mcp_server/server.py's real MCP `search_code` tool - this module only adapts that
+shared logic to the SDK's tool-registration shape.
 
 Note on the installed claude-agent-sdk API (0.2.95): `create_sdk_mcp_server` returns
 an `McpSdkServerConfig` (fields: type, name, instance) whose `instance` is a
@@ -16,15 +20,12 @@ pinned `mcp==2.0.0` doesn't have.
 """
 from __future__ import annotations
 
-import asyncio
 import sqlite3
 
 from claude_agent_sdk import McpSdkServerConfig, SdkMcpTool, create_sdk_mcp_server, tool
 
-from coderag_mcp.embeddings.voyage import embed_batch
 from coderag_mcp.orchestrator._mcp_compat import patch_mcp_server
-from coderag_mcp.store.chunks import search_chunks
-from coderag_mcp.store.db import run_db_sync
+from coderag_mcp.orchestrator.search_service import search_and_format
 
 
 def _build_search_tool(conn: sqlite3.Connection, repo_id: int) -> SdkMcpTool:
@@ -35,20 +36,9 @@ def _build_search_tool(conn: sqlite3.Connection, repo_id: int) -> SdkMcpTool:
         {"query": str, "top_k": int},
     )
     async def search_code(args: dict) -> dict:
-        top_k = args.get("top_k", 5)
-        query_embedding = (
-            await asyncio.to_thread(embed_batch, [args["query"]], input_type="query")
-        )[0]
-        results = await run_db_sync(search_chunks, conn, repo_id, query_embedding, top_k)
-
-        if not results:
-            text = "No matches found."
-        else:
-            text = "\n\n".join(
-                f"{r.file_path}:{r.start_line}-{r.end_line} "
-                f"({r.symbol_type} {r.symbol_name})\n{r.signature}\n{r.source}"
-                for r in results
-            )
+        text = await search_and_format(
+            conn, repo_id, args["query"], args.get("top_k", 5)
+        )
         return {"content": [{"type": "text", "text": text}]}
 
     return search_code

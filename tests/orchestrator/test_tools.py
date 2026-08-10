@@ -51,7 +51,7 @@ def test_search_code_tool_returns_matching_chunk(tmp_path):
     search_tool = _build_search_tool(conn, repo_id)
 
     with patch(
-        "coderag_mcp.orchestrator.tools.embed_batch",
+        "coderag_mcp.orchestrator.search_service.embed_batch",
         return_value=[[1.0, 0.0, 0.0, 0.0]],
     ):
         result = asyncio.run(search_tool.handler({"query": "f", "top_k": 1}))
@@ -64,7 +64,7 @@ def test_search_code_tool_no_matches(tmp_path):
     search_tool = _build_search_tool(conn, repo_id)
 
     with patch(
-        "coderag_mcp.orchestrator.tools.embed_batch",
+        "coderag_mcp.orchestrator.search_service.embed_batch",
         return_value=[[0.0, 1.0, 0.0, 0.0]],
     ):
         result = asyncio.run(search_tool.handler({"query": "unrelated", "top_k": 0}))
@@ -102,7 +102,7 @@ def test_build_search_server_handlers_reachable_the_way_the_sdk_reaches_them(tmp
 
     call_tool_handler = instance.request_handlers[types.CallToolRequest]
     with patch(
-        "coderag_mcp.orchestrator.tools.embed_batch",
+        "coderag_mcp.orchestrator.search_service.embed_batch",
         return_value=[[1.0, 0.0, 0.0, 0.0]],
     ):
         call_request = types.CallToolRequest(

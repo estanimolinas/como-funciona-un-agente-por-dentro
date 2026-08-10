@@ -19,7 +19,6 @@ parameter and `ctx.request_context.lifespan_context.conn`.
 """
 from __future__ import annotations
 
-import asyncio
 import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -28,11 +27,11 @@ from dataclasses import dataclass
 from mcp.server.mcpserver import Context, MCPServer
 
 from coderag_mcp.config import get_settings
-from coderag_mcp.embeddings.voyage import embed_batch
+from coderag_mcp.indexing.models import IndexingError
 from coderag_mcp.orchestrator.ask import ask as run_ask
-from coderag_mcp.orchestrator.indexing_service import index_and_store_repo
-from coderag_mcp.store.chunks import search_chunks
-from coderag_mcp.store.db import get_connection, init_schema, run_db_sync
+from coderag_mcp.orchestrator.indexing_service import index_and_store_repo_async
+from coderag_mcp.orchestrator.search_service import search_and_format
+from coderag_mcp.store.db import get_connection, init_schema
 
 
 @dataclass
@@ -63,10 +62,18 @@ def ping() -> str:
 @mcp.tool()
 async def index_repo(repo_url: str, ctx: Context) -> str:
     """Index a public GitHub/GitLab repo (clone, chunk, embed, store) if not already
-    indexed. Returns its repo_id, reusable across search_code/ask_repo calls - though
-    both of those also accept repo_url directly and index-on-first-use themselves."""
+    indexed. Returns a confirmation with the internal repo_id (informational only -
+    search_code and ask_repo take repo_url directly and index on first use, no
+    repo_id needed)."""
     conn = ctx.request_context.lifespan_context.conn
-    repo_id = await run_db_sync(index_and_store_repo, conn, repo_url)
+    try:
+        repo_id = await index_and_store_repo_async(conn, repo_url)
+    except IndexingError as exc:
+        # IndexingError messages are client-safe by design (see
+        # coderag_mcp/indexing/models.py) - matches api/ask_route.py's precedent.
+        return str(exc)
+    except Exception:  # noqa: BLE001 - e.g. Voyage embedding failures
+        return "Could not index the repository."
     return f"Indexed. repo_id={repo_id}"
 
 
@@ -75,19 +82,17 @@ async def search_code(repo_url: str, query: str, ctx: Context, top_k: int = 5) -
     """Semantic search over repo_url's indexed code chunks. Indexes repo_url first if
     this is the first call for it."""
     conn = ctx.request_context.lifespan_context.conn
-    repo_id = await run_db_sync(index_and_store_repo, conn, repo_url)
+    try:
+        repo_id = await index_and_store_repo_async(conn, repo_url)
+    except IndexingError as exc:
+        return str(exc)
+    except Exception:  # noqa: BLE001
+        return "Could not index the repository."
 
-    query_embedding = (
-        await asyncio.to_thread(embed_batch, [query], input_type="query")
-    )[0]
-    results = await run_db_sync(search_chunks, conn, repo_id, query_embedding, top_k)
-    if not results:
-        return "No matches found."
-    return "\n\n".join(
-        f"{r.file_path}:{r.start_line}-{r.end_line} ({r.symbol_type} {r.symbol_name})\n"
-        f"{r.signature}\n{r.source}"
-        for r in results
-    )
+    try:
+        return await search_and_format(conn, repo_id, query, top_k)
+    except Exception:  # noqa: BLE001 - e.g. Voyage embedding failures
+        return "Could not search the repository."
 
 
 @mcp.tool()
@@ -96,5 +101,18 @@ async def ask_repo(repo_url: str, question: str, ctx: Context) -> str:
     search + exact file reading). Indexes repo_url first if this is the first call for
     it."""
     conn = ctx.request_context.lifespan_context.conn
-    repo_id = await run_db_sync(index_and_store_repo, conn, repo_url)
-    return await run_ask(conn, repo_id, repo_url, question)
+    try:
+        repo_id = await index_and_store_repo_async(conn, repo_url)
+    except IndexingError as exc:
+        return str(exc)
+    except Exception:  # noqa: BLE001
+        return "Could not index the repository."
+
+    try:
+        return await run_ask(conn, repo_id, repo_url, question)
+    except IndexingError as exc:
+        # ask() re-clones the repo on every call (see orchestrator/ask.py); this
+        # can fail with the same errors as the initial index even on a cache hit.
+        return str(exc)
+    except Exception:  # noqa: BLE001 - any other orchestrator/subagent failure
+        return "Could not answer the question."
