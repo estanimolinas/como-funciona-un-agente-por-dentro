@@ -26,8 +26,6 @@ from coderag_mcp.config import get_settings
 from coderag_mcp.mcp_server.server import mcp
 from coderag_mcp.store.db import get_connection, init_schema
 
-settings = get_settings()
-
 
 def create_app() -> FastAPI:
     """Build a fresh FastAPI app instance.
@@ -39,7 +37,21 @@ def create_app() -> FastAPI:
     (see `app = create_app()` below); tests that need to spin up a second,
     independent live server (e.g. to exercise `/mcp` auth in isolation from
     the module-level `app`) can call `create_app()` again.
+
+    `settings = get_settings()` is read fresh here (not at module scope) so that
+    a monkeypatched `get_settings` is picked up by every `create_app()` call,
+    same as `mcp_server/server.py`'s `_lifespan` already does - `get_settings()`
+    is `@lru_cache`d, so this doesn't add repeated file I/O.
     """
+    settings = get_settings()
+
+    # mcp.streamable_http_app() mutates the shared, module-level `mcp` object's
+    # internal `_session_manager` attribute as a side effect (per the installed
+    # SDK's mcp/server/lowlevel/server.py). Harmless here: both this function's
+    # routing (via `mcp_app`) and its lifespan (via `mcp_app.router.lifespan_context`
+    # below) close over this call's local `mcp_app`/session-manager reference, not
+    # the mutated shared attribute on `mcp` - so calling create_app() again (as
+    # tests do) can't cross-contaminate an earlier app instance.
     mcp_app = mcp.streamable_http_app(streamable_http_path="/", host=settings.public_host)
     mcp_app.add_middleware(ApiKeyMiddleware)
 
