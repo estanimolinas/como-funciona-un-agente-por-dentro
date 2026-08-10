@@ -23,7 +23,7 @@ def client(tmp_path):
 
 def test_ask_returns_answer_on_success(client):
     with (
-        patch("coderag_mcp.api.ask_route.index_and_store_repo", return_value=1),
+        patch("coderag_mcp.api.ask_route.index_and_store_repo_async", return_value=1),
         patch("coderag_mcp.api.ask_route.run_ask", return_value="the answer"),
     ):
         response = client.post(
@@ -37,7 +37,7 @@ def test_ask_returns_answer_on_success(client):
 
 def test_ask_maps_indexing_error_to_400(client):
     with patch(
-        "coderag_mcp.api.ask_route.index_and_store_repo",
+        "coderag_mcp.api.ask_route.index_and_store_repo_async",
         side_effect=InvalidRepoURLError("bad host"),
     ):
         response = client.post(
@@ -50,7 +50,7 @@ def test_ask_maps_indexing_error_to_400(client):
 
 def test_ask_maps_non_indexing_failure_during_indexing_to_502(client):
     with patch(
-        "coderag_mcp.api.ask_route.index_and_store_repo",
+        "coderag_mcp.api.ask_route.index_and_store_repo_async",
         side_effect=RuntimeError("voyage api key invalid"),
     ):
         response = client.post(
@@ -63,7 +63,7 @@ def test_ask_maps_non_indexing_failure_during_indexing_to_502(client):
 
 def test_ask_maps_indexing_error_from_run_ask_to_400(client):
     with (
-        patch("coderag_mcp.api.ask_route.index_and_store_repo", return_value=1),
+        patch("coderag_mcp.api.ask_route.index_and_store_repo_async", return_value=1),
         patch(
             "coderag_mcp.api.ask_route.run_ask",
             side_effect=CloneTimeoutError("clone took too long"),
@@ -79,7 +79,7 @@ def test_ask_maps_indexing_error_from_run_ask_to_400(client):
 
 def test_ask_maps_orchestrator_failure_to_502(client):
     with (
-        patch("coderag_mcp.api.ask_route.index_and_store_repo", return_value=1),
+        patch("coderag_mcp.api.ask_route.index_and_store_repo_async", return_value=1),
         patch("coderag_mcp.api.ask_route.run_ask", side_effect=RuntimeError("sdk exploded")),
     ):
         response = client.post(

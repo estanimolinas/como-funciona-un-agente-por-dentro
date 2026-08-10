@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+import threading
 from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any, Iterator, TypeVar
@@ -11,7 +12,14 @@ import apsw
 
 EMBEDDING_DIM = 1024  # voyage-code-3 output dimension
 
-db_lock = asyncio.Lock()
+# threading.Lock, not asyncio.Lock: this lock is acquired thread-side (inside the
+# to_thread-spawned worker, see run_db_sync below), not on the event loop. An
+# asyncio.Lock only binds to a loop on first real contention, and raises
+# `RuntimeError: ... bound to a different event loop` if that contention ever
+# happens from a second loop (e.g. two independent uvicorn servers/loops in the
+# same process, as this project's /ask and /mcp transports could be under some
+# deployment topologies). threading.Lock has no such binding.
+db_lock = threading.Lock()
 
 _T = TypeVar("_T")
 
@@ -21,11 +29,17 @@ async def run_db_sync(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
 
     apsw connections aren't safe for concurrent use from multiple threads at once;
     asyncio.to_thread alone would let several ThreadPoolExecutor workers touch the
-    same shared connection simultaneously. db_lock is acquired here (on the event
-    loop, before the thread is spawned) so only one such call runs at a time.
+    same shared connection simultaneously. db_lock is a plain threading.Lock,
+    acquired and released entirely inside the worker thread (not on the event
+    loop) - this gives the same mutual-exclusion guarantee as the previous
+    asyncio.Lock-based approach without any event-loop binding.
     """
-    async with db_lock:
-        return await asyncio.to_thread(fn, *args, **kwargs)
+
+    def _locked() -> _T:
+        with db_lock:
+            return fn(*args, **kwargs)
+
+    return await asyncio.to_thread(_locked)
 
 
 _SCHEMA = """
