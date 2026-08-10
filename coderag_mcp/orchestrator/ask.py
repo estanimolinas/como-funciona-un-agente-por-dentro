@@ -1,4 +1,4 @@
-"""Ties the two subagents together behind a single ask() call."""
+"""Runs the single-agent orchestrator behind ask()."""
 from __future__ import annotations
 
 import asyncio
@@ -7,7 +7,7 @@ import sqlite3
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
 
 from coderag_mcp.indexing import clone
-from coderag_mcp.orchestrator.agents import CODE_EXPLORER, RAG_SEARCH
+from coderag_mcp.orchestrator.agents import ORCHESTRATOR_SYSTEM_PROMPT
 from coderag_mcp.orchestrator.tools import build_search_server
 
 
@@ -18,9 +18,9 @@ async def ask(conn: sqlite3.Connection, repo_id: int, repo_url: str, question: s
     try:
         options = ClaudeAgentOptions(
             cwd=str(repo_dir),
-            allowed_tools=["Agent"],
+            system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
+            allowed_tools=["mcp__search__search_code", "Read", "Grep", "Glob"],
             mcp_servers={"search": search_server},
-            agents={"rag-search": RAG_SEARCH, "code-explorer": CODE_EXPLORER},
         )
 
         answer_parts: list[str] = []
