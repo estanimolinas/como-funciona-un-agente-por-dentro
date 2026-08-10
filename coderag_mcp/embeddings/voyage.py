@@ -1,11 +1,28 @@
 """Voyage AI embedding client for code chunks."""
 from __future__ import annotations
 
+import logging
+import time
+
 import voyageai
+import voyageai.error
 
 from coderag_mcp.config import get_settings
 
 MODEL = "voyage-code-3"
+MAX_ATTEMPTS = 3
+BACKOFF_SECONDS = (1.0, 2.0)  # sleep before attempt 2, then before attempt 3
+
+_RETRYABLE_ERRORS = (
+    voyageai.error.APIConnectionError,
+    voyageai.error.RateLimitError,
+    voyageai.error.ServerError,
+    voyageai.error.ServiceUnavailableError,
+    voyageai.error.Timeout,
+    voyageai.error.TryAgain,
+)
+
+logger = logging.getLogger(__name__)
 
 _client: voyageai.Client | None = None
 
@@ -26,7 +43,37 @@ def embed_batch(texts: list[str], *, input_type: str = "document") -> list[list[
     the indexed corpus (the default, matching every existing indexing call site) and
     input_type="query" when embedding a search query - using the wrong side degrades
     retrieval quality without raising any error.
+
+    Retries up to MAX_ATTEMPTS times, with exponential backoff, on transient
+    voyageai.error types only (connection/timeout/rate-limit/server errors) -
+    anything else (auth failures, malformed requests) fails immediately, since
+    retrying those wastes time and can't succeed.
     """
     client = _get_client()
-    result = client.embed(texts, model=MODEL, input_type=input_type)
-    return result.embeddings
+
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            result = client.embed(texts, model=MODEL, input_type=input_type)
+            return result.embeddings
+        except _RETRYABLE_ERRORS as exc:
+            if attempt == MAX_ATTEMPTS:
+                logger.error(
+                    "embed_batch failed after %d attempts: %s",
+                    MAX_ATTEMPTS,
+                    exc,
+                    extra={"attempt": attempt, "error_type": type(exc).__name__},
+                )
+                raise
+            delay = BACKOFF_SECONDS[attempt - 1]
+            logger.warning(
+                "embed_batch attempt %d/%d failed, retrying in %.0fs: %s",
+                attempt,
+                MAX_ATTEMPTS,
+                delay,
+                exc,
+                extra={"attempt": attempt, "error_type": type(exc).__name__},
+            )
+            time.sleep(delay)
+
+    # Unreachable: the loop always returns or raises above.
+    raise AssertionError("unreachable")
