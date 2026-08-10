@@ -33,7 +33,7 @@ def _build_search_tool(conn: sqlite3.Connection, repo_id: int) -> SdkMcpTool:
         {"query": str, "top_k": int},
     )
     async def search_code(args: dict) -> dict:
-        query_embedding = embed_batch([args["query"]])[0]
+        query_embedding = embed_batch([args["query"]], input_type="query")[0]
         top_k = args.get("top_k", 5)
         results = search_chunks(conn, repo_id, query_embedding, top_k=top_k)
 

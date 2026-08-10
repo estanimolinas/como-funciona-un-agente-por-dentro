@@ -120,11 +120,7 @@ class _CursorWrapper:
     @property
     def lastrowid(self) -> int | None:
         """Get the last inserted row ID."""
-        try:
-            result = list(self._conn.cursor().execute("SELECT last_insert_rowid()"))
-            return result[0][0] if result else None
-        except Exception:
-            return None
+        return self._conn.last_insert_rowid()
 
 
 def get_connection(db_path: str) -> sqlite3.Connection:

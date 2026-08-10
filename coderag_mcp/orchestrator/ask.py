@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from claude_agent_sdk import ClaudeAgentOptions, query
+from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
 
 from coderag_mcp.orchestrator.agents import CODE_EXPLORER, RAG_SEARCH, fresh_clone
 from coderag_mcp.orchestrator.tools import build_search_server
@@ -22,9 +22,10 @@ async def ask(conn: sqlite3.Connection, repo_id: int, repo_url: str, question: s
 
         answer_parts: list[str] = []
         async for message in query(prompt=question, options=options):
-            for block in getattr(message, "content", []):
-                text = getattr(block, "text", None)
-                if text:
-                    answer_parts.append(text)
+            if not isinstance(message, AssistantMessage):
+                continue
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    answer_parts.append(block.text)
 
         return "".join(answer_parts)

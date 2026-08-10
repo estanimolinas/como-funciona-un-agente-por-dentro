@@ -1,26 +1,20 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from claude_agent_sdk import AssistantMessage, SystemMessage, TextBlock
 
 from coderag_mcp.orchestrator.ask import ask
-
-
-class _FakeBlock:
-    def __init__(self, text: str) -> None:
-        self.text = text
-
-
-class _FakeMessage:
-    def __init__(self, text: str) -> None:
-        self.content = [_FakeBlock(text)]
 
 
 async def _fake_query_stream(*, prompt, options):
     assert prompt == "how does auth work?"
     assert options.agents.keys() == {"rag-search", "code-explorer"}
     assert "Agent" in options.allowed_tools
-    yield _FakeMessage("Auth is handled in ")
-    yield _FakeMessage("auth.py:10-20.")
+    # A non-AssistantMessage (e.g. a subagent-start SystemMessage) should be ignored,
+    # not concatenated into the answer.
+    yield SystemMessage(subtype="subagent_start", data={})
+    yield AssistantMessage(content=[TextBlock(text="Auth is handled in ")], model="test")
+    yield AssistantMessage(content=[TextBlock(text="auth.py:10-20.")], model="test")
 
 
 @pytest.mark.asyncio

@@ -16,3 +16,17 @@ def test_embed_batch_calls_voyage_with_code3_model():
             model="voyage-code-3",
             input_type="document",
         )
+
+
+def test_embed_batch_uses_query_input_type_when_requested():
+    fake_result = MagicMock(embeddings=[[0.1, 0.2]])
+    with patch("coderag_mcp.embeddings.voyage.voyageai.Client") as mock_client_cls:
+        mock_client_cls.return_value.embed.return_value = fake_result
+
+        embed_batch(["how does auth work?"], input_type="query")
+
+        mock_client_cls.return_value.embed.assert_called_once_with(
+            ["how does auth work?"],
+            model="voyage-code-3",
+            input_type="query",
+        )

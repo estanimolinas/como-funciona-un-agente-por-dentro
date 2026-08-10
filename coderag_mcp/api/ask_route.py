@@ -24,10 +24,18 @@ async def ask_endpoint(request: AskRequest) -> AskResponse:
             repo_id = index_and_store_repo(conn, request.repo_url)
         except IndexingError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - e.g. Voyage embedding failures
+            raise HTTPException(
+                status_code=502, detail="Could not index the repository."
+            ) from exc
 
         try:
             answer = await run_ask(conn, repo_id, request.repo_url, request.question)
-        except Exception as exc:  # noqa: BLE001 - any orchestrator/subagent failure
+        except IndexingError as exc:
+            # ask() re-clones the repo on every call (see orchestrator/ask.py); this
+            # can fail with the same errors as the initial index even on a cache hit.
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - any other orchestrator/subagent failure
             raise HTTPException(
                 status_code=502, detail="Could not answer the question."
             ) from exc
