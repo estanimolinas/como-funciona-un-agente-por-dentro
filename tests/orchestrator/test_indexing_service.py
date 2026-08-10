@@ -131,17 +131,46 @@ def test_real_unique_constraint_raises_apsw_constraint_error(tmp_path):
 
 
 def test_concurrent_calls_recover_from_real_constraint_error(tmp_path):
-    """Test that index_and_store_repo recovers from concurrent race with real driver."""
+    """Prove index_and_store_repo's OWN create_repo call hits a genuine
+    apsw.ConstraintError and recovers, mirroring a real concurrent race:
+
+    - Caller A (this test, unmocked) inserts the row first via the real,
+      unmocked repo_store.create_repo -- simulating the winner of the race.
+    - Caller B (index_and_store_repo, the code under test) checks
+      get_repo_id_by_url first, as it always does. We simulate the exact
+      race window by making ONLY that first lookup report "not found" (as
+      it would for a real concurrent caller that checked a moment before
+      the winner's insert landed) -- every other call in the function,
+      including the real create_repo and the recovery lookup, is
+      completely unmocked.
+
+    This forces execution to actually reach index_and_store_repo's own
+    create_repo call, which then collides for real with the row Caller A
+    already inserted, raising a genuine apsw.ConstraintError that the
+    `except apsw.ConstraintError:` block must catch and recover from.
+    """
     db_path = str(tmp_path / "test.db")
     conn = get_connection(db_path)
     init_schema(conn, dim=4)
 
-    # First, create a repo using the real store layer to set up a concurrent scenario
-    repo_store.create_repo(conn, "https://github.com/concurrent/repo")
+    url = "https://github.com/concurrent/repo"
 
-    # Now mock index_repo and embed_batch, but NOT create_repo
-    # When index_and_store_repo tries to create_repo with the same URL,
-    # it will hit the real UNIQUE constraint and raise the real apsw.ConstraintError
+    # Caller A: the real, unmocked winner of the race. Row genuinely exists now.
+    winner_repo_id = repo_store.create_repo(conn, url)
+
+    # Simulate Caller B's pre-insert lookup seeing nothing yet: fake out ONLY
+    # the first call to get_repo_id_by_url (the early-idempotency check inside
+    # index_and_store_repo). Every subsequent call -- including the recovery
+    # lookup inside the except block -- goes through to the real function.
+    real_get_repo_id_by_url = repo_store.get_repo_id_by_url
+    calls = {"n": 0}
+
+    def fake_get_repo_id_by_url(conn, repo_url):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return None
+        return real_get_repo_id_by_url(conn, repo_url)
+
     with (
         patch(
             "coderag_mcp.orchestrator.indexing_service.index_repo",
@@ -152,13 +181,15 @@ def test_concurrent_calls_recover_from_real_constraint_error(tmp_path):
             return_value=[[1.0, 0.0, 0.0, 0.0]],
         ),
         patch(
-            "coderag_mcp.orchestrator.indexing_service.chunk_store.insert_chunks",
+            "coderag_mcp.orchestrator.indexing_service.repo_store.get_repo_id_by_url",
+            side_effect=fake_get_repo_id_by_url,
         ),
     ):
-        # Call index_and_store_repo with the same URL that already exists
-        # It should recover and return the existing repo_id instead of raising
-        repo_id = index_and_store_repo(conn, "https://github.com/concurrent/repo")
+        # index_and_store_repo's early check is fooled into proceeding, so it
+        # calls the REAL create_repo itself, which collides for real with the
+        # row Caller A already inserted -> genuine apsw.ConstraintError ->
+        # the except block must recover and return the winner's repo_id.
+        repo_id = index_and_store_repo(conn, url)
 
-        # Verify it returned a valid repo_id (the one we just created)
-        assert repo_id is not None
-        assert isinstance(repo_id, int)
+    assert calls["n"] >= 2, "test never reached the recovery lookup"
+    assert repo_id == winner_repo_id
