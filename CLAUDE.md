@@ -9,18 +9,28 @@ served both as a REST API and as an MCP server (Streamable HTTP transport).
 Indexes a repo with AST-aware chunking (tree-sitter, function/class-level,
 not naive line-splitting), embeds chunks with Voyage AI's `voyage-code-3`,
 stores vectors in SQLite/`sqlite-vec`, and answers questions with file:line
-citations via a Claude Agent SDK orchestrator (`POST /ask`) that routes
-between a semantic-search subagent and a code-exploration subagent.
+citations via a Claude Agent SDK **single-agent** orchestrator (`POST /ask`,
+and the MCP `ask_repo` tool) that has both semantic search
+(`mcp__search__search_code`) and exact file tools (`Read`/`Grep`/`Glob`)
+available directly, and chooses between them per question.
 
 **Architecture note:** the original design doc (linked below) specified
-Postgres/pgvector and a single retrieval-then-generate RAG endpoint. That
-was superseded before implementation by
+Postgres/pgvector and a single retrieval-then-generate RAG endpoint. That was
+superseded before implementation by
 `docs/superpowers/specs/2026-08-09-orchestrator-rag-architecture-design.md`
-— SQLite+`sqlite-vec` instead of Postgres, and a dual-path orchestrator
-(Claude Agent SDK, `rag-search` + `code-explorer` subagents) instead of a
-single retrieval call. The design doc below is still correct for
-architecture/security-constraints background; treat its store/RAG-endpoint
-specifics as superseded by the orchestrator spec.
+(SQLite+`sqlite-vec` instead of Postgres) and then again by
+`docs/superpowers/specs/2026-08-10-single-agent-mcp-tools-auth-design.md`,
+which collapsed that spec's dual-path orchestrator (a top-level agent
+dispatching to separate `rag-search`/`code-explorer` subagents via the Agent
+tool) into a single top-level agent given both tool families up front —
+dispatching added a token/latency round-trip for a decision the model can
+make directly. **If you see references to `RAG_SEARCH`, `CODE_EXPLORER`, or
+`fresh_clone` anywhere (old docs, old memory), they describe the superseded
+dual-path design — the current orchestrator is single-agent, see
+`coderag_mcp/orchestrator/agents.py`'s docstring for the full rationale.**
+The original design doc is still correct for architecture/security-
+constraints background; treat its store/RAG-endpoint specifics as
+superseded by the two specs above.
 
 Target audience: ML/AI engineers reviewing a GitHub portfolio. The point is
 to demonstrate real RAG-pipeline judgment and current protocol fluency
@@ -56,27 +66,79 @@ service.
 
 ## Current status
 
-**Plans 1, 2, and the dual-path-orchestrator plan — done, merged to
-`main`, 58/58 tests passing.** See
-`docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
+**Plans 1, 2, the dual-path-orchestrator plan (later collapsed to
+single-agent), and the single-agent/MCP-tools/auth plan — all done, 71/71
+tests passing.** See `docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
 `docs/superpowers/plans/2026-08-08-indexing-pipeline.md`, and
-`docs/superpowers/plans/2026-08-09-dual-path-orchestrator.md` (all steps
-checked off in the SDD ledger, though not in the plan files' own
-checkboxes — the ledger is the authoritative record) for exactly what was
-built and how each was reviewed. `POST /ask` is live end-to-end: index
-(clone → chunk → embed → store) on first request, then the orchestrator
-answers via `rag-search`/`code-explorer` subagents.
+`docs/superpowers/plans/2026-08-09-dual-path-orchestrator.md` for the
+earlier plans' history. This branch (`worktree-single-agent-mcp-tools-auth`)
+did the single-agent collapse, wired the real MCP tools (`index_repo`,
+`search_code`, `ask_repo`) onto the `mcp` object, added API-key auth to both
+transports, and then went through a final whole-branch review that found
+and fixed 14 more issues — worth knowing about since they're the kind of
+thing a fresh session might reintroduce:
 
-**In addition to the two Plan 2 hardening rounds below, the
-dual-path-orchestrator plan's whole-branch review (7-angle multi-agent
-pass) found and fixed 5 real correctness/robustness bugs** — worth
-knowing about since they're the kind of thing a fresh session might
-reintroduce:
+- `config.py`'s `allowed_hosts` env var required JSON-array syntax and
+  several fields were unprefixed, so a generic env var like `ALLOWED_HOSTS`
+  could unintentionally override this app's setting. Fixed with
+  `env_prefix="CODERAG_"` on `Settings` (every field is now
+  `CODERAG_<FIELD>`, e.g. `CODERAG_API_KEY`, except `voyage_api_key`, which
+  opts out via an explicit `validation_alias="VOYAGE_API_KEY"` to match
+  Voyage's own convention), plus a `field_validator` so `allowed_hosts`
+  accepts either a comma-separated string or a JSON array.
+- `get_settings()` did blocking file I/O (`Settings()` re-reads `.env`) on
+  every call, including from `ApiKeyMiddleware.dispatch` on every `/mcp`
+  request. Fixed with `@lru_cache` on `get_settings()`.
+- API key comparison used `==` (a timing side-channel). Fixed with
+  `secrets.compare_digest` in `api/auth.py`'s `validate_api_key`.
+- `search_code`'s embed→search→format logic was duplicated between
+  `orchestrator/tools.py` (the SDK in-process tool) and `mcp_server/server.py`
+  (the real MCP tool) — evidence it was a real problem: the same db_lock-scope
+  bug got found and fixed independently in each copy earlier in this branch's
+  history. Extracted into `orchestrator/search_service.py`'s
+  `search_and_format(conn, repo_id, query, top_k=5)`, used by both; `top_k`
+  is clamped there (`MAX_TOP_K = 50`) so one call can't pull the whole corpus
+  into a single response.
+- `db_lock` (in `store/db.py`) was held across the *entire* first-time-index
+  pipeline (git clone up to 60s, embedding up to 120s, not just the final DB
+  write), blocking every other concurrent DB-touching call on **both**
+  transports for up to ~3 minutes. Fixed by splitting
+  `orchestrator/indexing_service.py`'s indexing into non-DB work
+  (`_clone_chunk_and_embed`, run via plain `asyncio.to_thread`, unlocked) and
+  DB work (`_store_repo_and_chunks`, run via `run_db_sync`, locked); real
+  callers (`api/ask_route.py`, `mcp_server/server.py`'s three tools) now call
+  the new `index_and_store_repo_async`, which only holds the lock around the
+  existing-repo check and the final store. The original synchronous
+  `index_and_store_repo` (all-in-one) is kept for direct/test use where
+  there's no concurrent access to `conn` to worry about.
+- `db_lock` was an `asyncio.Lock`, which can raise `RuntimeError` under
+  contention across two different event loops. Fixed by switching to a plain
+  `threading.Lock`, acquired/released *inside* the `to_thread`-spawned worker
+  (not on the event-loop side) — see `run_db_sync`'s updated docstring.
+- The three MCP tools let any exception propagate raw to the client, unlike
+  `/ask` (which maps `IndexingError` to a client-safe message and everything
+  else to a generic one). Fixed with the same two-tier mapping in
+  `mcp_server/server.py`'s `index_repo`/`search_code`/`ask_repo` (MCP tools
+  can't raise `HTTPException`, so they catch and return the safe text
+  instead).
+- Several smaller fixes: `index_repo`'s docstring claimed a `repo_id`
+  handshake `search_code`/`ask_repo` don't actually support; `create_app()`
+  closed over a module-level `settings` snapshot instead of reading fresh
+  (now reads `get_settings()` inside the function body, consistent with
+  `mcp_server/server.py`'s `_lifespan`, safe post-`@lru_cache`); a comment
+  documenting why `mcp.streamable_http_app()`'s shared-state mutation is
+  harmless; `coderag.db` added to `.gitignore`; a missing docstring on
+  `embeddings/voyage.py`'s `_get_client`.
+
+**In addition, the dual-path-orchestrator plan's whole-branch review (before
+its later collapse to single-agent) found and fixed 5 correctness/robustness
+bugs** — still relevant since the underlying code they touched is still
+here:
 - `embeddings/voyage.py`'s `embed_batch` was embedding search queries with
   `input_type="document"` (the corpus-side setting) instead of `"query"` —
   `voyage-code-3` is asymmetric, so this silently degraded retrieval
   quality with no error. Fixed with an `input_type` parameter, defaulting
-  to `"document"`; `tools.py`'s `search_code` now passes `"query"`.
+  to `"document"`; query-embedding call sites pass `"query"`.
 - `api/ask_route.py` only mapped `IndexingError` from the *initial* index
   call to 400; `ask()`'s always-on re-clone (see below) can raise the same
   `IndexingError`s, and Voyage/DB failures during indexing aren't
@@ -97,22 +159,33 @@ reintroduce:
 
 What exists right now:
 - `coderag_mcp/api/main.py` — FastAPI app, `/health` endpoint, MCP server
-  mounted at `/mcp`. Has a docstring explaining the SDK-version adaptation
-  (see below) — read it before touching this file.
-- `coderag_mcp/mcp_server/server.py` — the MCP server object (`mcp`), still
-  only the dummy `ping` tool. The real search/ask functionality is live,
-  but as `POST /ask` (REST), not as MCP tools yet — wiring `index_repo`/
-  `search_code`/`ask_repo` onto this `mcp` object (item 1 in "What comes
-  next" below) is still pending; the mounting/lifespan wiring in
-  `api/main.py` should not need to change when that happens.
-- `coderag_mcp/config.py` — typed settings (`pydantic-settings`):
-  `public_host`, `voyage_api_key`, `sqlite_db_path`.
-- `tests/test_mcp_server.py` — real end-to-end test: spins up a real
-  `uvicorn` server on a real socket, connects with a real MCP client,
-  calls the `ping` tool. Not mocked. This is the pattern to follow for
-  testing the real tools later — no shortcuts here, the whole point of
-  this project's MCP layer is that it actually works against a real
+  mounted at `/mcp` (behind `ApiKeyMiddleware`, see `api/auth.py` below).
+  Has a docstring explaining the SDK-version adaptation (see below) — read
+  it before touching this file.
+- `coderag_mcp/api/auth.py` — API key auth, one validation core
+  (`validate_api_key`, constant-time compare via `secrets.compare_digest`)
+  with two adapters: `require_api_key` (FastAPI `Depends`, for `/ask`) and
+  `ApiKeyMiddleware` (ASGI middleware, for the mounted `/mcp` sub-app, where
+  `Depends()` never runs). Auth is disabled entirely when `CODERAG_API_KEY`
+  is unset/empty (the default).
+- `coderag_mcp/mcp_server/server.py` — the MCP server object (`mcp`), with
+  four tools: `ping` (health check), `index_repo`, `search_code`, `ask_repo`.
+  All three real tools map `IndexingError` to a client-safe message and
+  everything else to a generic one, matching `/ask`'s posture — never let a
+  raw exception (which could leak clone stderr/server paths) reach the
   client.
+- `coderag_mcp/config.py` — typed settings (`pydantic-settings`),
+  `env_prefix="CODERAG_"`: `app_name`, `public_host`, `voyage_api_key`
+  (opts out of the prefix, reads `VOYAGE_API_KEY`), `sqlite_db_path`,
+  `api_key` (reads `CODERAG_API_KEY`), `allowed_hosts`, `max_repo_size_mb`,
+  `clone_timeout_s`, `max_file_count`, `pipeline_timeout_s`. `get_settings()`
+  is `@lru_cache`d.
+- `tests/test_mcp_server.py` — real end-to-end test: spins up a real
+  `uvicorn` server on a real socket, connects with a real MCP client, calls
+  the real tools (`ping`, `index_repo`, `search_code`, `ask_repo`), and
+  verifies `/mcp` auth and that `IndexingError`/generic-exception mapping
+  doesn't leak internals. Not mocked. This is the pattern to follow for
+  testing MCP tools going forward.
 - `coderag_mcp/indexing/` (Plan 2 — clone → tree-sitter → chunk):
   - `models.py` — `Chunk` dataclass and the `IndexingError` exception
     hierarchy (`InvalidRepoURLError`, `CloneTimeoutError`,
@@ -123,9 +196,7 @@ What exists right now:
     URLs, and dash-prefixed URLs (git argument-injection defense — always
     passes `--` before the URL to `git clone` too). `allow_local_paths` is
     an explicit opt-in used only by tests against the local fixture repo —
-    keep it `False` by default when this is wired behind an HTTP/MCP
-    endpoint later, so a caller can never get local-file disclosure through
-    the indexing path.
+    it is never passed as `True` from any real HTTP/MCP call site.
   - `chunker.py` — `chunk_file(path, repo_url, file_path) -> list[Chunk]`.
     tree-sitter-python parse; extracts top-level functions, classes, and
     each method inside a class as its own chunk. Unwraps
@@ -137,8 +208,8 @@ What exists right now:
     list[Chunk]`, the sole public entry point for this plan: clone → walk
     `.py` files (capped at `MAX_FILE_COUNT=500`) → chunk each (wrapped in
     its own defensive try/except as a second safety net) → clean up via
-    `clone.cleanup_clone`. `orchestrator.indexing_service.index_and_store_repo`
-    calls this function directly.
+    `clone.cleanup_clone`. `orchestrator.indexing_service` calls this
+    function directly.
   - Tests in `tests/indexing/` run against a real local git repo built by
     the `fixture_repo` fixture in `conftest.py` (`git init` + a commit) —
     zero network dependency.
@@ -159,12 +230,15 @@ What exists right now:
   - `db.py` — `get_connection(db_path) -> _APSWWrapper` (type-hinted
     `sqlite3.Connection` for interface familiarity, but the real contract
     is the `apsw`-backed wrapper — don't swap in a real `sqlite3.Connection`,
-    it lacks `.begin()`), `init_schema(conn, dim=1024)`. Loads the
+    it lacks `.begin()`), `init_schema(conn, dim=1024)`. `db_lock` is a
+    `threading.Lock` (not `asyncio.Lock` — see "Current status" above);
+    `run_db_sync(fn, *args, **kwargs)` acquires it inside the
+    `asyncio.to_thread`-spawned worker, not on the event loop. Loads the
     `sqlite-vec` extension; the `.dylib` existence-check fallback in
     `get_connection` is macOS-specific and unverified on the Render/Linux
-    deploy target ("What comes next" item 5 below) — SQLite's own `load_extension` has a
-    built-in platform-suffix fallback, so this is unconfirmed-risk, not a
-    known break.
+    deploy target ("What comes next" item below) — SQLite's own
+    `load_extension` has a built-in platform-suffix fallback, so this is
+    unconfirmed-risk, not a known break.
   - `repos.py` / `chunks.py` — `create_repo`, `get_repo_id_by_url`,
     `insert_chunks`, `search_chunks` (cosine distance via `sqlite-vec`'s
     `vec0` virtual table). Both `create_repo` and `insert_chunks` reach
@@ -173,13 +247,25 @@ What exists right now:
     cleanup — see below).
 - `coderag_mcp/embeddings/voyage.py` — `embed_batch(texts, *,
   input_type="document")`. Pass `input_type="query"` when embedding a
-  search query (asymmetric model) — see the input_type bug fixed above.
-- `coderag_mcp/orchestrator/` (Claude Agent SDK orchestrator):
-  - `indexing_service.py` — `index_and_store_repo(conn, repo_url) -> int`,
-    idempotent by URL (checks `repos` before re-cloning/re-embedding).
+  search query (asymmetric model). `_get_client()` lazily builds and caches
+  the shared `voyageai.Client`.
+- `coderag_mcp/orchestrator/` (Claude Agent SDK single-agent orchestrator):
+  - `indexing_service.py` — idempotent-by-URL indexing. `index_and_store_repo
+    (conn, repo_url) -> int` is the plain synchronous, all-in-one version
+    (clone+chunk+embed+store), used directly by tests and any caller with
+    exclusive, non-concurrent access to `conn`.
+    `index_and_store_repo_async(conn, repo_url) -> int` is what real
+    callers (`api/ask_route.py`, `mcp_server/server.py`) use: it splits the
+    work so `db_lock` (via `run_db_sync`) is only held for the existing-repo
+    check and the final store, not for cloning/embedding.
+  - `search_service.py` — `search_and_format(conn, repo_id, query, top_k=5)
+    -> str`, the single shared implementation of embed-query → search →
+    format-as-text, used by both `tools.py`'s SDK tool and
+    `mcp_server/server.py`'s real MCP tool. Clamps `top_k` to `MAX_TOP_K=50`.
   - `tools.py` — `build_search_server(conn, repo_id)`, the `search_code`
-    custom tool exposed as an in-process MCP server via
-    `claude_agent_sdk.create_sdk_mcp_server`.
+    custom tool exposed to the single-agent orchestrator as an in-process
+    MCP server via `claude_agent_sdk.create_sdk_mcp_server`. Thin adapter
+    over `search_service.search_and_format` — see its module docstring.
   - `_mcp_compat.py` — **a second, separate `mcp` SDK gotcha, read this
     before touching anything MCP-related in `orchestrator/`:**
     `claude_agent_sdk.create_sdk_mcp_server` is written against the
@@ -198,19 +284,20 @@ What exists right now:
     this stub instead, process-wide, with no diagnostic. Root-caused via
     bytecode/source inspection of both packages, not guessed — see
     the module's docstring for the full trail if this needs revisiting.
-  - `agents.py` — `RAG_SEARCH`, `CODE_EXPLORER` (`AgentDefinition`s) and
-    `fresh_clone(repo_url)`, a context manager around `clone.clone_repo`/
-    `cleanup_clone` (always `allow_local_paths=False`).
+  - `agents.py` — `ORCHESTRATOR_SYSTEM_PROMPT`, the single-agent's system
+    prompt (see its docstring for why the earlier two-`AgentDefinition`
+    dispatch design was collapsed into this one agent).
   - `ask.py` — `ask(conn, repo_id, repo_url, question) -> str`. Clones the
-    repo **on every call**, not just when `code-explorer` is actually
-    invoked — `ClaudeAgentOptions.cwd` must be set before the orchestrator
+    repo **on every call**, not just when file-reading tools are actually
+    used — `ClaudeAgentOptions.cwd` must be set before the orchestrator
     runs, so there's no way to clone lazily without hooking the SDK's
     internal tool-dispatch (out of scope for v1). This is a deliberate,
     documented latency tradeoff, not a bug.
 - `coderag_mcp/api/ask_route.py` — `POST /ask` (`AskRequest{repo_url,
-  question}` → `AskResponse{answer}`). Indexes on first request, then
-  calls `orchestrator.ask.ask()`. Maps `IndexingError` (from either the
-  initial index or `ask()`'s re-clone) to 400, everything else to 502.
+  question}` → `AskResponse{answer}`), behind `require_api_key`. Indexes on
+  first request via `index_and_store_repo_async`, then calls
+  `orchestrator.ask.ask()`. Maps `IndexingError` (from either the initial
+  index or `ask()`'s re-clone) to 400, everything else to 502.
 
 **Important gotcha already paid for — don't rediscover it:** the `mcp`
 Python SDK installed here is **2.0.0**, which has a completely different
@@ -235,59 +322,42 @@ current — they may describe the older `FastMCP`-based API.
   thread actually stopped; `TEST_PORT` is hardcoded (8765) and would
   collide under parallel test execution (e.g. `pytest-xdist`).
 - No `LICENSE` file, no CI yet.
-- `get_settings()` has no `@lru_cache` — fine at current scale, revisit if
-  it's called per-request somewhere later.
-- `POST /ask` does blocking work (git clone, synchronous Voyage HTTP
-  calls, sqlite reads/writes) directly on the event loop inside an `async
-  def` endpoint, with no `run_in_executor`/`asyncio.to_thread` offload —
-  one slow request stalls every other concurrent request the process is
-  serving. No connection pooling either: `get_connection()` +
-  `init_schema()` (including reloading the `sqlite-vec` extension) run on
-  every `/ask` call.
-- `embeddings/voyage.py`'s `embed_batch` constructs a new `voyageai.Client()`
-  on every call instead of reusing one.
+- `embeddings/voyage.py`'s `embed_batch` constructs the client lazily but
+  still round-trips to Voyage synchronously inside whatever thread called
+  it — fine given the current `asyncio.to_thread` offload pattern, just
+  noting there's no batching/retry/backoff logic yet.
 - The "only manage the transaction if I own it" pattern (`not
   conn._conn.in_transaction`) is hand-duplicated across `store/chunks.py`,
   `store/repos.py`, and `orchestrator/indexing_service.py`, reaching into
   the `_APSWWrapper`'s private `_conn` from two different modules. A
-  shared `transaction(conn)` helper (and a public `in_transaction`
-  property on `_APSWWrapper`) would collapse all three.
+  shared `transaction(conn)` helper (already exists in `store/db.py` and is
+  used by `indexing_service.py`) and a public `in_transaction` property on
+  `_APSWWrapper` would collapse the remaining duplication in `chunks.py`/
+  `repos.py`.
 - `_mcp_compat.py`'s monkeypatch (see above) and `get_connection()`'s
   `-> sqlite3.Connection` type hint (the real contract needs
   `_APSWWrapper`'s `.begin()`) are both documented-but-real landmines for
   a future contributor trusting the stated interface.
+- The pre-clone repo-size mitigation is a `--filter=blob:limit=<n>`
+  partial-clone flag plus a post-clone aggregate check — no true
+  streaming/disk-quota enforcement yet.
 
 ## What comes next
 
 Superseded from the original design doc's Build Order by the
-orchestrator/dual-path work (Plan 1, Plan 2, and the
-dual-path-orchestrator plan are all done — see "Current status" above).
-Remaining, roughly in priority order:
+orchestrator/single-agent/auth work (all done — see "Current status"
+above). Remaining, roughly in priority order:
 
-1. Wire the real MCP tools (`index_repo`, `search_code`, `ask_repo`) onto
-   the `mcp` object in `mcp_server/server.py`, reusing
-   `orchestrator.indexing_service.index_and_store_repo` and
-   `orchestrator.ask.ask` rather than duplicating logic — the
-   mounting/lifespan code in `api/main.py` should not need changes for
-   this. **Do not pass `allow_local_paths=True`** — that flag exists
-   solely for tests against a local fixture repo; a real endpoint must
-   only ever accept `github.com`/`gitlab.com` URLs.
-2. Address the deferred tech debt from the dual-path-orchestrator review
-   (see "Known deferred items" above) — at minimum the blocking-I/O-in-
-   async-endpoint issue before this is ever load-tested or deployed.
-3. Auth (API key), remaining production-readiness pieces from the spec.
-   Natural point to promote the hardcoded indexing constants
-   (`ALLOWED_HOSTS`, `MAX_REPO_SIZE_MB`, `CLONE_TIMEOUT_S`,
-   `MAX_FILE_COUNT`, `PIPELINE_TIMEOUT_S`) to `pydantic-settings`, and to
-   revisit the pre-clone size mitigation (currently a
-   `--filter=blob:limit=<n>` partial-clone flag plus a post-clone aggregate
-   check — no true streaming/disk-quota enforcement yet).
-4. Minimal React+Vite+TypeScript frontend (separate plan, deliberately
+1. Minimal React+Vite+TypeScript frontend (separate plan, deliberately
    deferred — this repo is backend-first).
-5. Deploy (Render + Supabase + Vercel per the spec — note `store/db.py`'s
+2. Deploy (Render + Supabase + Vercel per the spec — note `store/db.py`'s
    sqlite-vec extension loading is unverified on Linux, see above) +
    polish the README (architecture diagram, demo GIF, live URL,
    design-decisions section) + ADRs.
+3. Any of the "Known deferred items" above worth addressing before a
+   public demo — none are blocking, but the `transaction()`-duplication
+   cleanup and the repo-size streaming enforcement are the two most likely
+   to matter under real load.
 
 ## How to work in this repo
 
@@ -298,7 +368,7 @@ Remaining, roughly in priority order:
   truth — don't silently deviate from it), then `writing-plans` to produce
   a task-by-task plan, then `subagent-driven-development` to execute it
   with per-task review and a final whole-branch review. Don't skip the
-  review loop — it's what caught the two real bugs (broken version pin,
-  loopback-only MCP host) in Plan 1's final review.
+  review loop — it's what caught real bugs in every plan so far (see
+  "Current status" above for the fullest list).
 - No LangChain, no DeepAgents, no OpenShell — those belong to nanoLoop, not
   here.

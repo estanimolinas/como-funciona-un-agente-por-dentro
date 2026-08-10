@@ -1,13 +1,17 @@
 # CodeRAG-MCP
 
 Code-aware RAG backend: indexes public repositories with AST-aware chunking
-(tree-sitter), stores embeddings in Postgres/pgvector, and answers questions
-about the code with file:line citations. Served both as a REST API and as
-an MCP server (Streamable HTTP), so it can be queried directly or plugged
-into any MCP client (Claude Desktop, Claude.ai connectors, etc.).
+(tree-sitter), embeds chunks with Voyage AI's `voyage-code-3`, and stores
+them in SQLite with the `sqlite-vec` extension (cosine similarity). Answers
+questions about the code, with file:line citations, via a Claude Agent SDK
+single-agent orchestrator that combines semantic search with exact file
+reading. Served both as a REST API (`POST /ask`) and as an MCP server
+(Streamable HTTP, mounted at `/mcp`), so it can be queried directly or
+plugged into any MCP client (Claude Desktop, Claude.ai connectors, etc.).
 
-**Status:** early scaffold — see the full design doc for architecture,
-decisions, and roadmap.
+**Status:** REST (`POST /ask`) and MCP (`index_repo`, `search_code`,
+`ask_repo`) are both live end-to-end, behind optional API-key auth — see the
+full design doc for architecture, decisions, and roadmap.
 
 ## Inspiration
 
@@ -26,18 +30,59 @@ python3 -m venv .venv
 ./.venv/bin/pip install -e ".[dev]"
 ```
 
+Create a `.env` file in the repo root (or export the equivalent environment
+variables):
+
+```bash
+# Required to embed code chunks and search queries (Voyage AI).
+VOYAGE_API_KEY=your-voyage-api-key
+
+# Optional: if set, /ask and /mcp both require this key on every request
+# (see Auth below). Leave unset/empty to disable auth (the default).
+CODERAG_API_KEY=your-chosen-secret
+```
+
+All other settings (`CODERAG_PUBLIC_HOST`, `CODERAG_SQLITE_DB_PATH`,
+`CODERAG_ALLOWED_HOSTS`, etc.) are optional and have sensible defaults — see
+`coderag_mcp/config.py`. Note the `CODERAG_` prefix: every setting except
+`VOYAGE_API_KEY` is only read from its `CODERAG_`-prefixed env var name, so a
+generic env var like `ALLOWED_HOSTS` (common on PaaS platforms) can't
+accidentally override it.
+
 ## Run
 
 ```bash
 ./.venv/bin/uvicorn coderag_mcp.api.main:app --reload
 ```
 
+## Auth
+
+If `CODERAG_API_KEY` is set, both `/ask` and `/mcp` require an `X-API-Key`
+header matching it — requests without it (or with the wrong value) get a
+401. If `CODERAG_API_KEY` is unset (the default), auth is disabled and any
+request is accepted.
+
+```bash
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-chosen-secret" \
+  -d '{"repo_url": "https://github.com/owner/repo", "question": "How does X work?"}'
+```
+
 ## MCP server
 
 An MCP server (Streamable HTTP transport) is mounted at `/mcp` on the same
-running app. It currently exposes a single tool, `ping`, used to verify the
-protocol wiring end-to-end; real code-RAG tools will be added in a later
-plan.
+running app, subject to the same `X-API-Key` requirement described above.
+It exposes:
+
+- `ping` — trivial health check.
+- `index_repo(repo_url)` — clone, chunk, embed, and store a public
+  GitHub/GitLab repo (idempotent by URL; a no-op if already indexed).
+- `search_code(repo_url, query, top_k=5)` — semantic search over a repo's
+  indexed code chunks, indexing it first if this is the first call.
+- `ask_repo(repo_url, question)` — answer a question about a repo via the
+  same single-agent orchestrator `POST /ask` uses, indexing it first if
+  needed.
 
 ## Test
 
