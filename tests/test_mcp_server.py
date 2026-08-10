@@ -77,13 +77,56 @@ async def test_index_repo_and_search_code_over_streamable_http(live_server, tmp_
             await session.initialize()
 
             with patch(
-                "coderag_mcp.mcp_server.server.index_and_store_repo"
+                "coderag_mcp.mcp_server.server.index_and_store_repo_async"
             ) as mock_index:
                 mock_index.return_value = 1
                 result = await session.call_tool(
                     "index_repo", {"repo_url": str(source_repo)}
                 )
                 assert "1" in result.content[0].text
+
+
+async def test_index_repo_maps_indexing_error_without_leaking_internals(
+    live_server, tmp_path, monkeypatch
+):
+    """IndexingError messages are client-safe by design (see
+    coderag_mcp/indexing/models.py) and should be returned verbatim - but any
+    *other* exception must be mapped to a generic message, not propagated raw
+    (which could leak internals like git clone's stderr/server temp paths)."""
+    from coderag_mcp.config import Settings
+    from coderag_mcp.indexing.models import InvalidRepoURLError
+
+    monkeypatch.setattr(
+        "coderag_mcp.mcp_server.server.get_settings",
+        lambda: Settings(sqlite_db_path=str(tmp_path / "mcp_test3.db")),
+    )
+
+    async with streamable_http_client(live_server) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            with patch(
+                "coderag_mcp.mcp_server.server.index_and_store_repo_async",
+                side_effect=InvalidRepoURLError("host not on allowlist"),
+            ):
+                result = await session.call_tool(
+                    "index_repo", {"repo_url": "https://evil.example/a/b"}
+                )
+                assert result.content[0].text == "host not on allowlist"
+
+            with patch(
+                "coderag_mcp.mcp_server.server.index_and_store_repo_async",
+                side_effect=RuntimeError(
+                    "voyage api key invalid, temp dir /private/tmp/xyz123"
+                ),
+            ):
+                result = await session.call_tool(
+                    "index_repo", {"repo_url": "https://github.com/a/b"}
+                )
+                text = result.content[0].text
+                assert text == "Could not index the repository."
+                assert "/private/tmp/xyz123" not in text
+                assert "voyage api key" not in text
 
 
 async def test_search_code_and_ask_repo_over_streamable_http(live_server, tmp_path, monkeypatch):
@@ -100,14 +143,14 @@ async def test_search_code_and_ask_repo_over_streamable_http(live_server, tmp_pa
 
             with (
                 patch(
-                    "coderag_mcp.mcp_server.server.index_and_store_repo", return_value=1
+                    "coderag_mcp.mcp_server.server.index_and_store_repo_async", return_value=1
                 ),
                 patch(
-                    "coderag_mcp.mcp_server.server.embed_batch",
+                    "coderag_mcp.orchestrator.search_service.embed_batch",
                     return_value=[[1.0, 0.0, 0.0, 0.0]],
                 ),
                 patch(
-                    "coderag_mcp.mcp_server.server.search_chunks", return_value=[]
+                    "coderag_mcp.orchestrator.search_service.search_chunks", return_value=[]
                 ),
             ):
                 result = await session.call_tool(
@@ -117,7 +160,7 @@ async def test_search_code_and_ask_repo_over_streamable_http(live_server, tmp_pa
 
             with (
                 patch(
-                    "coderag_mcp.mcp_server.server.index_and_store_repo", return_value=1
+                    "coderag_mcp.mcp_server.server.index_and_store_repo_async", return_value=1
                 ),
                 patch(
                     "coderag_mcp.mcp_server.server.run_ask", return_value="the answer"
@@ -133,7 +176,7 @@ def test_ping_tool_rejected_without_api_key(monkeypatch):
     from coderag_mcp.config import Settings
 
     monkeypatch.setattr(
-        "coderag_mcp.api.auth.get_settings", lambda: Settings(coderag_api_key="secret123")
+        "coderag_mcp.api.auth.get_settings", lambda: Settings(api_key="secret123")
     )
 
     # Use a freshly-built app rather than the module-level `app` singleton:

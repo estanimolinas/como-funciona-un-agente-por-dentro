@@ -11,6 +11,7 @@ _client: voyageai.Client | None = None
 
 
 def _get_client() -> voyageai.Client:
+    """Lazily initialize and return the shared Voyage client."""
     global _client
     if _client is None:
         settings = get_settings()

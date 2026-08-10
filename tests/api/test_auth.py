@@ -11,7 +11,7 @@ from coderag_mcp.store.db import get_connection, init_schema
 
 
 def _settings(key: str) -> Settings:
-    return Settings(coderag_api_key=key)
+    return Settings(api_key=key)
 
 
 def test_validate_api_key_allows_anything_when_unset():
@@ -30,7 +30,7 @@ def test_validate_api_key_requires_exact_match_when_set():
 @pytest.fixture()
 def client_with_key(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "coderag_mcp.api.auth.get_settings", lambda: Settings(coderag_api_key="secret123")
+        "coderag_mcp.api.auth.get_settings", lambda: Settings(api_key="secret123")
     )
     conn = get_connection(str(tmp_path / "test.db"))
     init_schema(conn)
@@ -60,7 +60,7 @@ def test_ask_rejects_wrong_key(client_with_key):
 
 def test_ask_accepts_correct_key(client_with_key):
     with (
-        patch("coderag_mcp.api.ask_route.index_and_store_repo", return_value=1),
+        patch("coderag_mcp.api.ask_route.index_and_store_repo_async", return_value=1),
         patch("coderag_mcp.api.ask_route.run_ask", return_value="the answer"),
     ):
         response = client_with_key.post(

@@ -3,6 +3,8 @@ for the two transports (/ask is a normal FastAPI route; /mcp is a mounted Starle
 sub-app, where Depends() never runs)."""
 from __future__ import annotations
 
+import secrets
+
 from fastapi import Header, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -13,11 +15,14 @@ from coderag_mcp.config import get_settings
 
 def validate_api_key(provided: str | None) -> bool:
     """True if auth is disabled (empty CODERAG_API_KEY, the default) or provided
-    matches the configured key exactly."""
+    matches the configured key. Uses a constant-time comparison so this isn't a
+    timing side-channel."""
     settings = get_settings()
-    if not settings.coderag_api_key:
+    if not settings.api_key:
         return True
-    return provided == settings.coderag_api_key
+    if provided is None:
+        return False
+    return secrets.compare_digest(provided, settings.api_key)
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
