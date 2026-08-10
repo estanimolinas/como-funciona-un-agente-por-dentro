@@ -1,13 +1,32 @@
 """SQLite connection and schema management, with the sqlite-vec extension loaded."""
 from __future__ import annotations
 
+import asyncio
 import sqlite3
+from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any, Iterator, TypeVar
 
 import apsw
 
 EMBEDDING_DIM = 1024  # voyage-code-3 output dimension
+
+db_lock = asyncio.Lock()
+
+_T = TypeVar("_T")
+
+
+async def run_db_sync(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
+    """Run a blocking, DB-touching callable off the event loop, serialized by db_lock.
+
+    apsw connections aren't safe for concurrent use from multiple threads at once;
+    asyncio.to_thread alone would let several ThreadPoolExecutor workers touch the
+    same shared connection simultaneously. db_lock is acquired here (on the event
+    loop, before the thread is spawned) so only one such call runs at a time.
+    """
+    async with db_lock:
+        return await asyncio.to_thread(fn, *args, **kwargs)
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS repos (

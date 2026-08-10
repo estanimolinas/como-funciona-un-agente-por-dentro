@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from coderag_mcp.api.ask_route import router as ask_router
 from coderag_mcp.config import get_settings
 from coderag_mcp.mcp_server.server import mcp
+from coderag_mcp.store.db import get_connection, init_schema
 
 settings = get_settings()
 
@@ -31,8 +32,13 @@ mcp_app = mcp.streamable_http_app(streamable_http_path="/", host=settings.public
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with mcp_app.router.lifespan_context(mcp_app):
-        yield
+    app.state.db_conn = get_connection(settings.sqlite_db_path)
+    init_schema(app.state.db_conn)
+    try:
+        async with mcp_app.router.lifespan_context(mcp_app):
+            yield
+    finally:
+        app.state.db_conn.close()
 
 
 app = FastAPI(title="CodeRAG-MCP", lifespan=lifespan)

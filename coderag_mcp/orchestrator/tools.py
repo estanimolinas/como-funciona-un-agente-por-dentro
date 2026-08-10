@@ -23,9 +23,14 @@ from claude_agent_sdk import McpSdkServerConfig, SdkMcpTool, create_sdk_mcp_serv
 from coderag_mcp.embeddings.voyage import embed_batch
 from coderag_mcp.orchestrator._mcp_compat import patch_mcp_server
 from coderag_mcp.store.chunks import search_chunks
+from coderag_mcp.store.db import run_db_sync
 
 
 def _build_search_tool(conn: sqlite3.Connection, repo_id: int) -> SdkMcpTool:
+    def _search(query_text: str, top_k: int):
+        query_embedding = embed_batch([query_text], input_type="query")[0]
+        return search_chunks(conn, repo_id, query_embedding, top_k=top_k)
+
     @tool(
         "search_code",
         "Semantic search over the indexed repo's code chunks. Returns the top "
@@ -33,9 +38,8 @@ def _build_search_tool(conn: sqlite3.Connection, repo_id: int) -> SdkMcpTool:
         {"query": str, "top_k": int},
     )
     async def search_code(args: dict) -> dict:
-        query_embedding = embed_batch([args["query"]], input_type="query")[0]
         top_k = args.get("top_k", 5)
-        results = search_chunks(conn, repo_id, query_embedding, top_k=top_k)
+        results = await run_db_sync(_search, args["query"], top_k)
 
         if not results:
             text = "No matches found."

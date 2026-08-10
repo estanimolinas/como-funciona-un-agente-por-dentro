@@ -1,18 +1,21 @@
 """Ties the two subagents together behind a single ask() call."""
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
 
-from coderag_mcp.orchestrator.agents import CODE_EXPLORER, RAG_SEARCH, fresh_clone
+from coderag_mcp.indexing import clone
+from coderag_mcp.orchestrator.agents import CODE_EXPLORER, RAG_SEARCH
 from coderag_mcp.orchestrator.tools import build_search_server
 
 
 async def ask(conn: sqlite3.Connection, repo_id: int, repo_url: str, question: str) -> str:
     search_server = build_search_server(conn, repo_id)
 
-    with fresh_clone(repo_url) as repo_dir:
+    repo_dir = await asyncio.to_thread(clone.clone_repo, repo_url, allow_local_paths=False)
+    try:
         options = ClaudeAgentOptions(
             cwd=str(repo_dir),
             allowed_tools=["Agent"],
@@ -29,3 +32,5 @@ async def ask(conn: sqlite3.Connection, repo_id: int, repo_url: str, question: s
                     answer_parts.append(block.text)
 
         return "".join(answer_parts)
+    finally:
+        await asyncio.to_thread(clone.cleanup_clone, repo_dir)

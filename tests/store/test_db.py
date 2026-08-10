@@ -5,6 +5,25 @@ import pytest
 from coderag_mcp.store.db import get_connection, init_schema
 
 
+@pytest.mark.asyncio
+async def test_run_db_sync_offloads_to_a_thread_and_returns_the_result():
+    import threading
+
+    from coderag_mcp.store.db import run_db_sync
+
+    caller_thread = threading.current_thread()
+    seen_thread = {}
+
+    def _work(x, y):
+        seen_thread["thread"] = threading.current_thread()
+        return x + y
+
+    result = await run_db_sync(_work, 2, 3)
+
+    assert result == 5
+    assert seen_thread["thread"] is not caller_thread
+
+
 def test_init_schema_creates_tables(tmp_path):
     conn = get_connection(str(tmp_path / "test.db"))
     init_schema(conn, dim=4)
