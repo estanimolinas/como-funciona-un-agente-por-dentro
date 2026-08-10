@@ -33,31 +33,39 @@ def insert_chunks(
     if len(chunks) != len(embeddings):
         raise ValueError("chunks and embeddings must be the same length")
 
-    for chunk, embedding in zip(chunks, embeddings):
-        cursor = conn.execute(
-            """
-            INSERT INTO chunks
-                (repo_id, file_path, symbol_type, symbol_name, start_line, end_line,
-                 signature, source, parent_class)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                repo_id,
-                chunk.file_path,
-                chunk.symbol_type,
-                chunk.symbol_name,
-                chunk.start_line,
-                chunk.end_line,
-                chunk.signature,
-                chunk.source,
-                chunk.parent_class,
-            ),
-        )
-        conn.execute(
-            "INSERT INTO chunk_vectors (chunk_id, repo_id, embedding) VALUES (?, ?, ?)",
-            (cursor.lastrowid, repo_id, _serialize(embedding)),
-        )
-    conn.commit()
+    # Wrap the entire operation in a transaction so a failure mid-loop
+    # rolls back all changes (including any chunks already inserted).
+    # This preserves idempotency: a failed call leaves the DB as it was before.
+    conn.begin()
+    try:
+        for chunk, embedding in zip(chunks, embeddings):
+            cursor = conn.execute(
+                """
+                INSERT INTO chunks
+                    (repo_id, file_path, symbol_type, symbol_name, start_line, end_line,
+                     signature, source, parent_class)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    repo_id,
+                    chunk.file_path,
+                    chunk.symbol_type,
+                    chunk.symbol_name,
+                    chunk.start_line,
+                    chunk.end_line,
+                    chunk.signature,
+                    chunk.source,
+                    chunk.parent_class,
+                ),
+            )
+            conn.execute(
+                "INSERT INTO chunk_vectors (chunk_id, repo_id, embedding) VALUES (?, ?, ?)",
+                (cursor.lastrowid, repo_id, _serialize(embedding)),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def search_chunks(

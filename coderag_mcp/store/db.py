@@ -45,15 +45,36 @@ class _APSWWrapper:
         return _CursorWrapper(cursor, self._conn)
 
     def executescript(self, sql: str) -> None:
-        """Execute multiple SQL statements."""
-        for statement in sql.split(";"):
-            statement = statement.strip()
-            if statement:
-                self.execute(statement)
+        """Execute multiple SQL statements.
+
+        Uses apsw's native multi-statement execution which correctly
+        handles semicolons inside string literals and other SQL constructs.
+        """
+        cursor = self._conn.cursor()
+        # apsw's cursor.execute() correctly handles multiple semicolon-separated
+        # statements, including proper handling of semicolons in string literals
+        list(cursor.execute(sql))
 
     def commit(self) -> None:
-        """Commit the transaction (no-op for apsw)."""
-        pass
+        """Commit the current transaction if one is active.
+
+        In apsw, statements are autocommitted by default. This method only
+        issues a COMMIT if a transaction is currently active (i.e., after BEGIN).
+        """
+        if self._conn.in_transaction:
+            cursor = self._conn.cursor()
+            list(cursor.execute("COMMIT"))
+
+    def begin(self) -> None:
+        """Begin a new transaction."""
+        cursor = self._conn.cursor()
+        list(cursor.execute("BEGIN"))
+
+    def rollback(self) -> None:
+        """Rollback the current transaction if one is active."""
+        if self._conn.in_transaction:
+            cursor = self._conn.cursor()
+            list(cursor.execute("ROLLBACK"))
 
     def close(self) -> None:
         """Close the connection."""
