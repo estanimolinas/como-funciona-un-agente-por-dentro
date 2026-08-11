@@ -16,6 +16,7 @@ Note on adapting to the installed `mcp` SDK (2.0.0):
 """
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -26,6 +27,8 @@ from coderag_mcp.config import get_settings, validate_settings
 from coderag_mcp.logging_config import configure_logging
 from coderag_mcp.mcp_server.server import mcp
 from coderag_mcp.store.db import get_connection, init_schema
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -46,7 +49,11 @@ def create_app() -> FastAPI:
     """
     configure_logging()
     settings = get_settings()
-    validate_settings(settings)
+    try:
+        validate_settings(settings)
+    except RuntimeError:
+        logger.error("startup validation failed", exc_info=True)
+        raise
 
     # mcp.streamable_http_app() mutates the shared, module-level `mcp` object's
     # internal `_session_manager` attribute as a side effect (per the installed

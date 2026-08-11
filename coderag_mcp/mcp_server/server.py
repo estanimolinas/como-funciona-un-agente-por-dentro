@@ -19,6 +19,7 @@ parameter and `ctx.request_context.lifespan_context.conn`.
 """
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -34,6 +35,8 @@ from coderag_mcp.orchestrator.indexing_service import index_and_store_repo_async
 from coderag_mcp.orchestrator.search_service import search_and_format
 from coderag_mcp.store.db import get_connection, init_schema
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class AppContext:
@@ -44,7 +47,11 @@ class AppContext:
 async def _lifespan(server: MCPServer) -> AsyncIterator[AppContext]:
     configure_logging()
     settings = get_settings()
-    validate_settings(settings)
+    try:
+        validate_settings(settings)
+    except RuntimeError:
+        logger.error("startup validation failed", exc_info=True)
+        raise
     conn = get_connection(settings.sqlite_db_path)
     init_schema(conn)
     try:
@@ -76,6 +83,7 @@ async def index_repo(repo_url: str, ctx: Context) -> str:
         # coderag_mcp/indexing/models.py) - matches api/ask_route.py's precedent.
         return str(exc)
     except Exception:  # noqa: BLE001 - e.g. Voyage embedding failures
+        logger.exception("indexing failed", extra={"repo_url": repo_url})
         return "Could not index the repository."
     return f"Indexed. repo_id={repo_id}"
 
@@ -90,11 +98,13 @@ async def search_code(repo_url: str, query: str, ctx: Context, top_k: int = 5) -
     except IndexingError as exc:
         return str(exc)
     except Exception:  # noqa: BLE001
+        logger.exception("indexing failed", extra={"repo_url": repo_url})
         return "Could not index the repository."
 
     try:
         return await search_and_format(conn, repo_id, query, top_k)
     except Exception:  # noqa: BLE001 - e.g. Voyage embedding failures
+        logger.exception("search failed", extra={"repo_url": repo_url, "query": query})
         return "Could not search the repository."
 
 
@@ -109,6 +119,7 @@ async def ask_repo(repo_url: str, question: str, ctx: Context) -> str:
     except IndexingError as exc:
         return str(exc)
     except Exception:  # noqa: BLE001
+        logger.exception("indexing failed", extra={"repo_url": repo_url})
         return "Could not index the repository."
 
     try:
@@ -118,4 +129,5 @@ async def ask_repo(repo_url: str, question: str, ctx: Context) -> str:
         # can fail with the same errors as the initial index even on a cache hit.
         return str(exc)
     except Exception:  # noqa: BLE001 - any other orchestrator/subagent failure
+        logger.exception("ask failed", extra={"repo_url": repo_url})
         return "Could not answer the question."

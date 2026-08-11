@@ -11,7 +11,6 @@ from coderag_mcp.config import get_settings
 
 MODEL = "voyage-code-3"
 MAX_ATTEMPTS = 3
-BACKOFF_SECONDS = (1.0, 2.0)  # sleep before attempt 2, then before attempt 3
 
 _RETRYABLE_ERRORS = (
     voyageai.error.APIConnectionError,
@@ -48,6 +47,15 @@ def embed_batch(texts: list[str], *, input_type: str = "document") -> list[list[
     voyageai.error types only (connection/timeout/rate-limit/server errors) -
     anything else (auth failures, malformed requests) fails immediately, since
     retrying those wastes time and can't succeed.
+
+    Caveat: this backoff is tuned for transient connection/server errors, not
+    for sustained per-minute rate limits (Voyage's actual limits are
+    per-minute, e.g. 3 RPM/10K TPM on accounts without a payment method). A
+    single large embed_batch call that exceeds a token-per-minute cap will
+    exhaust all retries in a few seconds rather than actually recovering,
+    since the backoff delays here can't outlast a per-minute window. The real
+    fix for that - batching large chunk sets into multiple smaller requests -
+    is a known deferred item, not implemented here.
     """
     client = _get_client()
 
@@ -62,9 +70,10 @@ def embed_batch(texts: list[str], *, input_type: str = "document") -> list[list[
                     MAX_ATTEMPTS,
                     exc,
                     extra={"attempt": attempt, "error_type": type(exc).__name__},
+                    exc_info=True,
                 )
                 raise
-            delay = BACKOFF_SECONDS[attempt - 1]
+            delay = 2 ** (attempt - 1)  # 1s, 2s, 4s, ... scales with MAX_ATTEMPTS
             logger.warning(
                 "embed_batch attempt %d/%d failed, retrying in %.0fs: %s",
                 attempt,

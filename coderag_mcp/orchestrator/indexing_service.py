@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sqlite3
+import time
 
 import apsw
 
@@ -12,6 +14,8 @@ from coderag_mcp.indexing.pipeline import index_repo
 from coderag_mcp.store import chunks as chunk_store
 from coderag_mcp.store import repos as repo_store
 from coderag_mcp.store.db import run_db_sync, transaction
+
+logger = logging.getLogger(__name__)
 
 
 def _clone_chunk_and_embed(
@@ -88,6 +92,19 @@ async def index_and_store_repo_async(conn: sqlite3.Connection, repo_url: str) ->
     if existing_id is not None:
         return existing_id
 
+    start = time.monotonic()
+    logger.info("index_repo starting", extra={"repo_url": repo_url})
+
     extracted, embeddings = await asyncio.to_thread(_clone_chunk_and_embed, repo_url)
 
-    return await run_db_sync(_store_repo_and_chunks, conn, repo_url, extracted, embeddings)
+    repo_id = await run_db_sync(_store_repo_and_chunks, conn, repo_url, extracted, embeddings)
+
+    logger.info(
+        "index_repo completed",
+        extra={
+            "repo_url": repo_url,
+            "duration_s": time.monotonic() - start,
+            "chunk_count": len(extracted),
+        },
+    )
+    return repo_id
