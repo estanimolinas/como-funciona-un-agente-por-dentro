@@ -76,4 +76,8 @@ async def _stream_events(conn: sqlite3.Connection, request: AskRequest) -> Async
 async def ask_stream_endpoint(
     request: AskRequest, conn: sqlite3.Connection = Depends(get_db_conn)
 ) -> StreamingResponse:
-    return StreamingResponse(_stream_events(conn, request), media_type="text/event-stream")
+    return StreamingResponse(
+        _stream_events(conn, request),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
