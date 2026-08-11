@@ -1,4 +1,4 @@
-# CodeRAG-MCP
+# AgentTrace
 
 Code-aware RAG backend: indexes public repositories with AST-aware chunking
 (tree-sitter), embeds chunks with Voyage AI's `voyage-code-3`, and stores

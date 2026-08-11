@@ -1,4 +1,4 @@
-# CodeRAG-MCP — context for a fresh Claude session
+# AgentTrace — context for a fresh Claude session
 
 Read this before doing anything else in this repo.
 
@@ -338,7 +338,7 @@ What exists right now:
   `answer_token` can include intermediate model commentary, not only the
   final answer).
 - `frontend/` (React+Vite+TypeScript+Tailwind): A local-only UI for the
-  coderag-mcp orchestrator, consuming `POST /ask/stream` to show a live
+  AgentTrace orchestrator, consuming `POST /ask/stream` to show a live
   "x-ray" of tool calls, tool results, and the streamed answer as it works.
   Dev-server-proxy-only setup (proxies `/ask` and `/ask/stream` to the
   backend on `http://localhost:8000`, no CORS configuration needed). Uses a

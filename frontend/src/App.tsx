@@ -19,7 +19,7 @@ function App() {
     <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6 text-slate-100">
       <div className="flex flex-col gap-2">
         <h1 className="text-4xl font-bold tracking-tight">
-          code<span className="text-rose-500">rag</span>-mcp
+          Agent<span className="text-rose-500">Trace</span>
         </h1>
         <p className="text-slate-400">
           Mirá en vivo cómo el agente explora el código para responder.
