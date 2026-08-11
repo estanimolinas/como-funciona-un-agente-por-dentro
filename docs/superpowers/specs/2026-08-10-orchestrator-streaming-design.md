@@ -86,6 +86,7 @@ Each SSE message is `data: <json>\n\n`, one JSON object with a discriminant
 ```
 {"type": "indexing_start", "repo_url": "..."}
 {"type": "indexing_done", "chunk_count": 42, "duration_s": 3.2}
+{"type": "no_semantic_index", "message": "..."}
 {"type": "tool_call", "tool": "search_code" | "Read" | "Grep" | "Glob", "input": {...}}
 {"type": "tool_result", "tool": "...", "tool_use_id": "...", "output_preview": "...", "is_error": true | false | null}
 {"type": "reasoning", "text": "..."}
@@ -105,6 +106,12 @@ Each SSE message is `data: <json>\n\n`, one JSON object with a discriminant
   tool). `is_error` is `ToolResultBlock.is_error` passed through verbatim
   (`true`, `false`, or `null` if the SDK didn't set it) so a failed tool
   call is distinguishable from a successful one.
+- `no_semantic_index` is emitted once, before any `tool_call`/`answer_token`
+  events, when the repo has zero indexed chunks (unsupported language, or
+  an empty/non-code repo) — the orchestrator falls back to exploring files
+  directly instead of semantic search. `message` is a user-facing,
+  Spanish-language string. Added by the 2026-08-11 frontend-polish plan,
+  which extends this spec rather than the schema having always included it.
 - `reasoning` events depend on extended thinking being enabled in
   `ClaudeAgentOptions`, which it currently is not — don't expect to see
   `reasoning` events in practice yet. Enabling extended thinking is a

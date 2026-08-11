@@ -69,7 +69,7 @@ service.
 **Plans 1, 2, the dual-path-orchestrator plan (later collapsed to
 single-agent), the single-agent/MCP-tools/auth plan, the local-robustness
 plan, the orchestrator-streaming plan, and the frontend plan — all done,
-97/97 backend tests + 27/27 frontend tests passing.** See
+99/99 backend tests + 29/29 frontend tests passing.** See
 `docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
 `docs/superpowers/plans/2026-08-08-indexing-pipeline.md`, and
 `docs/superpowers/plans/2026-08-09-dual-path-orchestrator.md` for the
@@ -310,7 +310,12 @@ What exists right now:
     internal tool-dispatch — a deliberate, documented latency tradeoff, not
     a bug), then iterates `query()` and yields one structured event per
     tool call, tool result, reasoning block, and answer token
-    (`tool_call`, `tool_result`, `reasoning`, `answer_token`, `done`).
+    (`tool_call`, `tool_result`, `reasoning`, `answer_token`, `done`). If the
+    repo has zero indexed chunks (unsupported language, or an empty/non-code
+    repo), it first yields a `no_semantic_index` event (Spanish, user-facing
+    `message` field) and appends an English note to the system prompt
+    telling the model to rely on `Read`/`Grep`/`Glob` instead of
+    `search_code`.
     `ask(conn, repo_id, repo_url, question) -> str` is now a thin wrapper
     over `ask_stream()`: it keeps only `answer_token` events and
     concatenates them — same external signature/behavior as before this
@@ -400,7 +405,7 @@ in priority order:
 
 - Python 3.11+, venv at `.venv/` (`./.venv/bin/pytest`, `./.venv/bin/pip`).
 - `./.venv/bin/pytest -v` — run the backend test suite before and after any
-  change (97 tests).
+  change (99 tests).
 - Node 20.19+ or 22.12+ (per `frontend/node_modules/vite/package.json`'s
   `engines`), npm at `frontend/` (`cd frontend && npm install`, `npm test`).
   `npm test` — run the frontend test suite before and after any frontend
