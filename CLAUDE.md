@@ -69,7 +69,7 @@ service.
 **Plans 1, 2, the dual-path-orchestrator plan (later collapsed to
 single-agent), the single-agent/MCP-tools/auth plan, the local-robustness
 plan, the orchestrator-streaming plan, and the frontend plan — all done,
-99/99 backend tests + 29/29 frontend tests passing.** See
+99/99 backend tests + 35/35 frontend tests passing.** See
 `docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
 `docs/superpowers/plans/2026-08-08-indexing-pipeline.md`, and
 `docs/superpowers/plans/2026-08-09-dual-path-orchestrator.md` for the

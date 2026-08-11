@@ -56,7 +56,7 @@ export function RunCard({ repoUrl, question, apiKey }: RunCardProps) {
       <div className="mb-2 text-sm text-slate-400">
         {repoUrl} — {question}
       </div>
-      <p className="mb-2 text-xs text-slate-500">Así explora y responde el agente, en vivo:</p>
+      <p className="mb-2 text-xs text-slate-400">Así explora y responde el agente, en vivo:</p>
       <div className="flex flex-col gap-2 font-mono text-sm">
         {status === 'connecting' ? <div className="text-slate-500">Conectando...</div> : null}
         {renderItems.map(({ key, event }) => (
