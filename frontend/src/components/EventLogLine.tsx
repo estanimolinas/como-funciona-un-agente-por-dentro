@@ -19,6 +19,8 @@ export function EventLogLine({ event, isTruncatedAnswer }: EventLogLineProps) {
           Indexed {event.chunk_count} chunks in {event.duration_s}s
         </div>
       )
+    case 'no_semantic_index':
+      return <div className="text-amber-400">⚠ {event.message}</div>
     case 'tool_call':
       return (
         <div className="text-sky-400">

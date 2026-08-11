@@ -65,6 +65,15 @@ describe('EventLogLine', () => {
     expect(screen.getByText(/Something broke/)).toBeInTheDocument()
   })
 
+  it('renders a no_semantic_index event', () => {
+    render(
+      <EventLogLine
+        event={{ type: 'no_semantic_index', message: 'No index available here.' }}
+      />,
+    )
+    expect(screen.getByText(/No index available here\./)).toBeInTheDocument()
+  })
+
   it('marks an answer_token as truncated when isTruncatedAnswer is set', () => {
     render(
       <EventLogLine

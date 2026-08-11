@@ -1,6 +1,7 @@
 export type StreamEvent =
   | { type: 'indexing_start'; repo_url: string }
   | { type: 'indexing_done'; chunk_count: number; duration_s: number }
+  | { type: 'no_semantic_index'; message: string }
   | { type: 'tool_call'; tool: string; input: Record<string, unknown> }
   | {
       type: 'tool_result'
