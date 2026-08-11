@@ -62,6 +62,17 @@ describe('RepoForm', () => {
     expect(questionInput.value).not.toBe('')
   })
 
+  it('fills the form with Spanish example questions', async () => {
+    const onSubmit = vi.fn()
+    const user = userEvent.setup()
+    render(<RepoForm onSubmit={onSubmit} />)
+
+    await user.click(screen.getAllByRole('button', { name: /probar:/i })[0])
+
+    const questionInput = screen.getByLabelText(/pregunta/i) as HTMLInputElement
+    expect(questionInput.value).toMatch(/^¿/)
+  })
+
   it('does not call onSubmit when the repo URL is empty', async () => {
     const onSubmit = vi.fn()
     const user = userEvent.setup()

@@ -11,12 +11,12 @@ const EXAMPLES: { label: string; repoUrl: string; question: string }[] = [
   {
     label: 'pypa/sampleproject — How is the package version defined?',
     repoUrl: 'https://github.com/pypa/sampleproject',
-    question: 'How is the package version defined?',
+    question: '¿Cómo se define la versión del paquete?',
   },
   {
     label: 'pallets/click — How does the @click.command decorator work?',
     repoUrl: 'https://github.com/pallets/click',
-    question: 'How does the @click.command decorator work?',
+    question: '¿Cómo funciona el decorador @click.command?',
   },
 ]
 

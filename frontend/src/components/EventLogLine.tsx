@@ -30,7 +30,7 @@ export function EventLogLine({ event, isTruncatedAnswer }: EventLogLineProps) {
       )
     case 'tool_call':
       return (
-        <div className="flex items-start gap-2 overflow-x-auto whitespace-pre-wrap text-sky-400">
+        <div className="mt-2 flex items-start gap-2 overflow-x-auto whitespace-pre-wrap text-sky-400">
           <span className="shrink-0">→</span>
           <span>{event.tool}({JSON.stringify(event.input)})</span>
         </div>
