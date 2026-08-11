@@ -401,7 +401,8 @@ in priority order:
 - Python 3.11+, venv at `.venv/` (`./.venv/bin/pytest`, `./.venv/bin/pip`).
 - `./.venv/bin/pytest -v` — run the backend test suite before and after any
   change (97 tests).
-- Node 18+, npm at `frontend/` (`./.venv/bin/npm install`, `npm test`).
+- Node 20.19+ or 22.12+ (per `frontend/node_modules/vite/package.json`'s
+  `engines`), npm at `frontend/` (`cd frontend && npm install`, `npm test`).
   `npm test` — run the frontend test suite before and after any frontend
   change (26 tests). Both test suites are independent and must pass.
 - Follow the same workflow used to build this: brainstorm/clarify scope

@@ -6,6 +6,8 @@ answer as it works.
 
 ## Prerequisites
 
+Node 20.19+ or 22.12+ (required by `vite`'s `engines` field).
+
 The backend must already be running on `http://localhost:8000` (see the
 root `README.md`'s Quickstart — `uvicorn coderag_mcp.api.main:app`).
 
