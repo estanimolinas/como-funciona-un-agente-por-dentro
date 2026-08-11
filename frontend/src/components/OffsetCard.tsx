@@ -8,8 +8,8 @@ interface OffsetCardProps {
 export function OffsetCard({ children, className = '' }: OffsetCardProps) {
   return (
     <div className="relative">
-      <div className="absolute inset-0 translate-x-1 translate-y-1 rounded bg-black" />
-      <div className={`relative z-10 rounded border-2 border-slate-100 ${className}`}>
+      <div aria-hidden="true" className="absolute inset-0 translate-x-1.5 translate-y-1.5 rounded bg-slate-100" />
+      <div className={`relative z-10 rounded border-2 border-slate-100 bg-slate-950 ${className}`}>
         {children}
       </div>
     </div>
