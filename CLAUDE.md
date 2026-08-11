@@ -69,7 +69,7 @@ service.
 **Plans 1, 2, the dual-path-orchestrator plan (later collapsed to
 single-agent), the single-agent/MCP-tools/auth plan, the local-robustness
 plan, the orchestrator-streaming plan, and the frontend plan — all done,
-97/97 backend tests + 26/26 frontend tests passing.** See
+97/97 backend tests + 27/27 frontend tests passing.** See
 `docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
 `docs/superpowers/plans/2026-08-08-indexing-pipeline.md`, and
 `docs/superpowers/plans/2026-08-09-dual-path-orchestrator.md` for the
@@ -404,7 +404,7 @@ in priority order:
 - Node 20.19+ or 22.12+ (per `frontend/node_modules/vite/package.json`'s
   `engines`), npm at `frontend/` (`cd frontend && npm install`, `npm test`).
   `npm test` — run the frontend test suite before and after any frontend
-  change (26 tests). Both test suites are independent and must pass.
+  change (27 tests). Both test suites are independent and must pass.
 - Follow the same workflow used to build this: brainstorm/clarify scope
   changes with the human partner first (the design doc is the source of
   truth — don't silently deviate from it), then `writing-plans` to produce
