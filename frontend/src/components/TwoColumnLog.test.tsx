@@ -104,6 +104,30 @@ describe('TwoColumnLog', () => {
     expect(screen.queryByText(/@@AGENTTRACE/)).not.toBeInTheDocument()
   })
 
+  it('routes an MCP-qualified search_code tool name (mcp__search__search_code) into the RAG column', () => {
+    const events: StreamEvent[] = [
+      { type: 'tool_call', tool: 'mcp__search__search_code', input: { query: 'auth' } },
+      {
+        type: 'tool_result',
+        tool: 'mcp__search__search_code',
+        tool_use_id: 'toolu_1',
+        output_preview: 'found it',
+        is_error: false,
+      },
+    ]
+    render(<TwoColumnLog events={events} status="streaming" isTruncated={false} />)
+    expect(screen.getAllByText(/mcp__search__search_code/).length).toBeGreaterThan(0)
+    // Confirm it landed in the RAG column specifically, not just anywhere in the DOM
+    // (the review flagged that existing routing tests were document-scoped, not
+    // column-scoped, which is exactly the gap that let this bug through).
+    const ragHeading = screen.getByText(/búsqueda semántica/i)
+    const ragColumn = ragHeading.parentElement
+    expect(ragColumn?.textContent).toContain('mcp__search__search_code')
+    const toolsHeading = screen.getByText(/herramientas de archivo/i)
+    const toolsColumn = toolsHeading.parentElement
+    expect(toolsColumn?.textContent).not.toContain('mcp__search__search_code')
+  })
+
   it('shows a connecting status line while status is connecting', () => {
     render(<TwoColumnLog events={[]} status="connecting" isTruncated={false} />)
     expect(screen.getByText(/conectando/i)).toBeInTheDocument()

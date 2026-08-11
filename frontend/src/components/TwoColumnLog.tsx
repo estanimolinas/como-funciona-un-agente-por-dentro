@@ -8,16 +8,22 @@ interface TwoColumnLogProps {
   isTruncated: boolean
 }
 
+// The orchestrator (coderag_mcp/orchestrator/ask.py) exposes search_code as an
+// in-process MCP server (coderag_mcp/orchestrator/tools.py), so the tool name a
+// real ToolUseBlock carries is the SDK-qualified `mcp__search__search_code`, not
+// the bare `search_code` - match both so routing works against real events, not
+// just the bare name a test might use. tool can be null (ask.py's
+// tool_names_by_id.get() lookup miss on a tool_result), so guard for that too.
+function isSearchCodeTool(tool: string | null): boolean {
+  return tool !== null && (tool === 'search_code' || tool.endsWith('__search_code'))
+}
+
 function isRagEvent(event: StreamEvent): boolean {
-  return (
-    (event.type === 'tool_call' || event.type === 'tool_result') && event.tool === 'search_code'
-  )
+  return (event.type === 'tool_call' || event.type === 'tool_result') && isSearchCodeTool(event.tool)
 }
 
 function isToolsEvent(event: StreamEvent): boolean {
-  return (
-    (event.type === 'tool_call' || event.type === 'tool_result') && event.tool !== 'search_code'
-  )
+  return (event.type === 'tool_call' || event.type === 'tool_result') && !isSearchCodeTool(event.tool)
 }
 
 export function TwoColumnLog({ events, status, isTruncated }: TwoColumnLogProps) {
