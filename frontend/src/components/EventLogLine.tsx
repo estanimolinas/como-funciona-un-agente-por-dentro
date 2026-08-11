@@ -1,3 +1,5 @@
+import ReactMarkdown from 'react-markdown'
+
 import type { StreamEvent } from '../types'
 
 interface EventLogLineProps {
@@ -38,12 +40,12 @@ export function EventLogLine({ event, isTruncatedAnswer }: EventLogLineProps) {
       return <div className="italic text-slate-500">{event.text}</div>
     case 'answer_token':
       return (
-        <span>
-          {event.text}
+        <div>
+          <ReactMarkdown>{event.text}</ReactMarkdown>
           {isTruncatedAnswer ? (
             <span className="text-amber-500"> [incomplete]</span>
           ) : null}
-        </span>
+        </div>
       )
     case 'done':
       return null

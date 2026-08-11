@@ -74,6 +74,14 @@ describe('EventLogLine', () => {
     expect(screen.getByText(/No index available here\./)).toBeInTheDocument()
   })
 
+  it('renders markdown syntax in an answer_token as real formatting, not raw text', () => {
+    const { container } = render(
+      <EventLogLine event={{ type: 'answer_token', text: 'This is **bold** text.' }} />,
+    )
+    expect(container.querySelector('strong')).toHaveTextContent('bold')
+    expect(screen.queryByText(/\*\*bold\*\*/)).not.toBeInTheDocument()
+  })
+
   it('marks an answer_token as truncated when isTruncatedAnswer is set', () => {
     render(
       <EventLogLine
