@@ -70,10 +70,10 @@ accidentally override it.
 
 ## Auth
 
-If `CODERAG_API_KEY` is set, both `/ask` and `/mcp` require an `X-API-Key`
-header matching it — requests without it (or with the wrong value) get a
-401. If `CODERAG_API_KEY` is unset (the default), auth is disabled and any
-request is accepted.
+If `CODERAG_API_KEY` is set, `/ask`, `/ask/stream`, and `/mcp` all require
+an `X-API-Key` header matching it — requests without it (or with the wrong
+value) get a 401. If `CODERAG_API_KEY` is unset (the default), auth is
+disabled and any request is accepted.
 
 ```bash
 curl -X POST http://localhost:8000/ask \

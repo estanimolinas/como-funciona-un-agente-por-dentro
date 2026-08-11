@@ -67,8 +67,9 @@ service.
 ## Current status
 
 **Plans 1, 2, the dual-path-orchestrator plan (later collapsed to
-single-agent), and the single-agent/MCP-tools/auth plan — all done, 71/71
-tests passing.** See `docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
+single-agent), the single-agent/MCP-tools/auth plan, the local-robustness
+plan, and the orchestrator-streaming plan — all done, 97/97 tests
+passing.** See `docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
 `docs/superpowers/plans/2026-08-08-indexing-pipeline.md`, and
 `docs/superpowers/plans/2026-08-09-dual-path-orchestrator.md` for the
 earlier plans' history. This branch (`worktree-single-agent-mcp-tools-auth`)
@@ -176,8 +177,9 @@ What exists right now:
   it before touching this file.
 - `coderag_mcp/api/auth.py` — API key auth, one validation core
   (`validate_api_key`, constant-time compare via `secrets.compare_digest`)
-  with two adapters: `require_api_key` (FastAPI `Depends`, for `/ask`) and
-  `ApiKeyMiddleware` (ASGI middleware, for the mounted `/mcp` sub-app, where
+  with two adapters: `require_api_key` (FastAPI `Depends`, for `/ask` and
+  `/ask/stream`) and `ApiKeyMiddleware` (ASGI middleware, for the mounted
+  `/mcp` sub-app, where
   `Depends()` never runs). Auth is disabled entirely when `CODERAG_API_KEY`
   is unset/empty (the default).
 - `coderag_mcp/mcp_server/server.py` — the MCP server object (`mcp`), with
