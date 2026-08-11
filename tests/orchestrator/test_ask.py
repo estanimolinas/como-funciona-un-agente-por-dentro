@@ -2,9 +2,18 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
-from claude_agent_sdk import AssistantMessage, SystemMessage, TextBlock
+from claude_agent_sdk import (
+    AssistantMessage,
+    StreamEvent,
+    SystemMessage,
+    TextBlock,
+    ThinkingBlock,
+    ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
+)
 
-from coderag_mcp.orchestrator.ask import ask
+from coderag_mcp.orchestrator.ask import ask, ask_stream
 
 
 async def _fake_query_stream(*, prompt, options):
@@ -58,3 +67,107 @@ async def test_ask_raises_timeout_error_if_query_never_completes(tmp_path):
                 question="how does auth work?",
                 timeout_s=0.05,
             )
+
+
+async def _scripted_query_stream(*, prompt, options):
+    assert options.include_partial_messages is True
+    yield AssistantMessage(
+        content=[ThinkingBlock(thinking="Let me check the code.", signature="sig")],
+        model="test",
+    )
+    yield AssistantMessage(
+        content=[ToolUseBlock(id="toolu_1", name="Glob", input={"pattern": "*.py"})],
+        model="test",
+    )
+    yield UserMessage(content=[ToolResultBlock(tool_use_id="toolu_1", content="main.py")])
+    yield StreamEvent(
+        uuid="u1", session_id="s1",
+        event={"type": "content_block_start", "index": 0, "content_block": {"type": "text"}},
+    )
+    yield StreamEvent(
+        uuid="u2", session_id="s1",
+        event={"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Auth is "}},
+    )
+    yield StreamEvent(
+        uuid="u3", session_id="s1",
+        event={"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "in main.py."}},
+    )
+    yield StreamEvent(
+        uuid="u4", session_id="s1",
+        event={"type": "content_block_stop", "index": 0},
+    )
+    yield AssistantMessage(content=[TextBlock(text="Auth is in main.py.")], model="test")
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_yields_one_event_per_block(tmp_path):
+    conn = MagicMock()
+
+    with (
+        patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
+        patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
+        patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.query", side_effect=_scripted_query_stream),
+    ):
+        events = [
+            event
+            async for event in ask_stream(conn, repo_id=1, repo_url="https://github.com/a/b", question="how does auth work?")
+        ]
+
+    assert events == [
+        {"type": "reasoning", "text": "Let me check the code."},
+        {"type": "tool_call", "tool": "Glob", "input": {"pattern": "*.py"}},
+        {"type": "tool_result", "tool_use_id": "toolu_1", "output_preview": "main.py"},
+        {"type": "answer_token", "text": "Auth is "},
+        {"type": "answer_token", "text": "in main.py."},
+        {"type": "done"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_truncates_long_tool_results(tmp_path):
+    conn = MagicMock()
+    long_content = "x" * 500
+
+    async def _one_tool_result(*, prompt, options):
+        yield AssistantMessage(
+            content=[ToolUseBlock(id="toolu_1", name="Read", input={"file_path": "big.py"})],
+            model="test",
+        )
+        yield UserMessage(content=[ToolResultBlock(tool_use_id="toolu_1", content=long_content)])
+
+    with (
+        patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
+        patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
+        patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.query", side_effect=_one_tool_result),
+    ):
+        events = [
+            event
+            async for event in ask_stream(conn, repo_id=1, repo_url="https://github.com/a/b", question="?")
+        ]
+
+    tool_result_event = next(e for e in events if e["type"] == "tool_result")
+    assert len(tool_result_event["output_preview"]) < 500
+    assert tool_result_event["output_preview"].endswith("... (truncated)")
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_raises_timeout_error_if_query_never_completes(tmp_path):
+    conn = MagicMock()
+
+    async def _hanging_query_stream(*, prompt, options):
+        await asyncio.sleep(10)
+        yield  # pragma: no cover - unreachable
+
+    with (
+        patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
+        patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
+        patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.query", side_effect=_hanging_query_stream),
+    ):
+        with pytest.raises(TimeoutError):
+            async for _event in ask_stream(
+                conn, repo_id=1, repo_url="https://github.com/a/b", question="?", timeout_s=0.05
+            ):
+                pass
