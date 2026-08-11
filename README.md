@@ -23,23 +23,30 @@ and the env-var-driven client factory pattern. No code is shared — nanoLoop
 is a LangChain/DeepAgents agent harness, this is a RAG/MCP service, with
 different stacks.
 
-## Setup
+## Quickstart
 
 ```bash
+git clone https://github.com/<you>/coderag-mcp.git
+cd coderag-mcp
 python3 -m venv .venv
 ./.venv/bin/pip install -e ".[dev]"
+
+cp .env.example .env
+# edit .env: set VOYAGE_API_KEY (see .env.example for where to get one)
+
+./.venv/bin/uvicorn coderag_mcp.api.main:app --reload
 ```
 
-Create a `.env` file in the repo root (or export the equivalent environment
-variables):
+The server refuses to start if `VOYAGE_API_KEY` is missing, with a message
+telling you what's wrong - see `coderag_mcp/config.py`'s `validate_settings`.
+
+Ask it a question about any public GitHub/GitLab repo (indexes it on first
+use):
 
 ```bash
-# Required to embed code chunks and search queries (Voyage AI).
-VOYAGE_API_KEY=your-voyage-api-key
-
-# Optional: if set, /ask and /mcp both require this key on every request
-# (see Auth below). Leave unset/empty to disable auth (the default).
-CODERAG_API_KEY=your-chosen-secret
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"repo_url": "https://github.com/pypa/sampleproject", "question": "What does this project do, and where is the package version defined?"}'
 ```
 
 All other settings (`CODERAG_PUBLIC_HOST`, `CODERAG_SQLITE_DB_PATH`,
@@ -48,12 +55,6 @@ All other settings (`CODERAG_PUBLIC_HOST`, `CODERAG_SQLITE_DB_PATH`,
 `VOYAGE_API_KEY` is only read from its `CODERAG_`-prefixed env var name, so a
 generic env var like `ALLOWED_HOSTS` (common on PaaS platforms) can't
 accidentally override it.
-
-## Run
-
-```bash
-./.venv/bin/uvicorn coderag_mcp.api.main:app --reload
-```
 
 ## Auth
 
@@ -83,6 +84,24 @@ It exposes:
 - `ask_repo(repo_url, question)` — answer a question about a repo via the
   same single-agent orchestrator `POST /ask` uses, indexing it first if
   needed.
+
+### Using it as an MCP server in Claude Code
+
+With the server running (see Quickstart above):
+
+```bash
+claude mcp add --transport http coderag http://localhost:8000/mcp/
+```
+
+If `CODERAG_API_KEY` is set, pass it as a header:
+
+```bash
+claude mcp add --transport http coderag http://localhost:8000/mcp/ \
+  --header "X-Api-Key: your-chosen-secret"
+```
+
+Verify it connected: `claude mcp list` should show `coderag` as `✔ Connected`.
+Claude Code can now call `index_repo`, `search_code`, and `ask_repo` directly.
 
 ## Test
 
