@@ -9,12 +9,12 @@ interface RepoFormProps {
 
 const EXAMPLES: { label: string; repoUrl: string; question: string }[] = [
   {
-    label: 'pypa/sampleproject — How is the package version defined?',
+    label: 'pypa/sampleproject — ¿Cómo se define la versión del paquete?',
     repoUrl: 'https://github.com/pypa/sampleproject',
     question: '¿Cómo se define la versión del paquete?',
   },
   {
-    label: 'pallets/click — How does the @click.command decorator work?',
+    label: 'pallets/click — ¿Cómo funciona el decorador @click.command?',
     repoUrl: 'https://github.com/pallets/click',
     question: '¿Cómo funciona el decorador @click.command?',
   },

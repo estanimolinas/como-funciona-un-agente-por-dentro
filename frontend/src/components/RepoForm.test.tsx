@@ -67,9 +67,13 @@ describe('RepoForm', () => {
     const user = userEvent.setup()
     render(<RepoForm onSubmit={onSubmit} />)
 
-    await user.click(screen.getAllByRole('button', { name: /probar:/i })[0])
+    const exampleButtons = screen.getAllByRole('button', { name: /probar:/i })
 
+    await user.click(exampleButtons[0])
     const questionInput = screen.getByLabelText(/pregunta/i) as HTMLInputElement
+    expect(questionInput.value).toMatch(/^¿/)
+
+    await user.click(exampleButtons[1])
     expect(questionInput.value).toMatch(/^¿/)
   })
 
