@@ -29,19 +29,26 @@ async function readWithTimeout(
 export function useAskStream(params: AskStreamParams | null): AskStreamResult {
   const [events, setEvents] = useState<StreamEvent[]>([])
   const [status, setStatus] = useState<RunStatus>('connecting')
-  // Guards against setting state after the params identity changes (e.g. a
-  // fast unmount) — this hook does not reopen a connection for a given
-  // params object, so a stale in-flight read must not clobber a later run's
-  // state if this hook instance were ever reused, which callers avoid by
-  // always mounting a fresh RunCard per run (see Task 5).
-  const cancelledRef = useRef(false)
+  // Holds the reader for whichever run is currently in flight, so cleanup
+  // (below) can actually cancel it — the reader itself is only created
+  // inside the async `run()` function, after at least one await, so there's
+  // no other way for the effect's cleanup closure to reach it.
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
 
   useEffect(() => {
     if (params === null) {
       return
     }
 
-    cancelledRef.current = false
+    // A fresh closure variable per effect invocation — NOT a ref reset at
+    // the top of every run. A ref shared across runs would be un-done by
+    // the very next run's setup (run N+1's body resets it to false right
+    // after run N's cleanup set it to true), so a stale run N could keep
+    // writing into run N+1's state. This `cancelled` binding belongs only
+    // to this invocation of the effect and is never touched by any other
+    // invocation, so run N's cleanup permanently and exclusively marks run
+    // N's own closure as cancelled.
+    let cancelled = false
     setEvents([])
     setStatus('connecting')
 
@@ -49,6 +56,14 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
     if (params.apiKey) {
       headers['X-API-Key'] = params.apiKey
     }
+
+    // This run's own reader, tracked locally (not just via readerRef) so
+    // this run's `finally` can tell whether `readerRef.current` still
+    // points at ITS reader before clearing it — otherwise, if this run's
+    // async work is still unwinding after cleanup already swapped in a
+    // newer run's reader (see the cleanup function below), this `finally`
+    // could null out the newer run's reference instead of its own.
+    let myReader: ReadableStreamDefaultReader<Uint8Array> | null = null
 
     async function run() {
       try {
@@ -62,15 +77,19 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
           throw new Error('Response has no body')
         }
 
+        if (cancelled) return
         setStatus('streaming')
 
         const reader = response.body.getReader()
+        myReader = reader
+        readerRef.current = reader
         const decoder = new TextDecoder()
         let buffer = ''
         let sawTerminal = false
 
         while (true) {
           const result = await readWithTimeout(reader, INACTIVITY_TIMEOUT_MS)
+          if (cancelled) return
           if (result === 'timeout') {
             await reader.cancel()
             throw new Error('Connection lost')
@@ -88,7 +107,7 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
             const jsonText = line.slice('data:'.length).trim()
             const event = JSON.parse(jsonText) as StreamEvent
 
-            if (cancelledRef.current) return
+            if (cancelled) return
 
             setEvents((prev) => [...prev, event])
             if (event.type === 'done') {
@@ -101,22 +120,36 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
           }
         }
 
-        if (!sawTerminal && !cancelledRef.current) {
+        if (!sawTerminal && !cancelled) {
           setStatus('error')
           setEvents((prev) => [...prev, { type: 'error', message: 'Connection lost' }])
         }
       } catch (err) {
-        if (cancelledRef.current) return
+        if (cancelled) return
         const message = err instanceof Error ? err.message : String(err)
         setStatus('error')
         setEvents((prev) => [...prev, { type: 'error', message }])
+      } finally {
+        if (readerRef.current === myReader) {
+          readerRef.current = null
+        }
       }
     }
 
     void run()
 
     return () => {
-      cancelledRef.current = true
+      cancelled = true
+      // Actually stop the underlying network read, not just suppress
+      // further state writes — otherwise the fetch/read loop (and any live
+      // readWithTimeout timer) keeps running in the background until the
+      // server closes the stream or the 30s inactivity timeout fires.
+      // reader.cancel() is safe to call even if the reader is mid-read or
+      // already closed/errored.
+      readerRef.current?.cancel().catch(() => {
+        // Nothing to do — we're tearing down this run anyway.
+      })
+      readerRef.current = null
     }
   }, [params])
 

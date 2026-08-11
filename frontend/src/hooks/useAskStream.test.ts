@@ -126,6 +126,33 @@ describe('useAskStream', () => {
     expect(result.current).toEqual({ events: [], status: 'connecting' })
   })
 
+  it('does not reopen the connection on a re-render with a reference-equal params object', async () => {
+    // Proves the spec-mandated behavior directly: a re-render that passes
+    // the *same* params object (by reference) must not cause the effect to
+    // tear down and refire. This only holds because of React's normal
+    // dependency-array semantics (`[params]` compared by `Object.is`) — the
+    // hook does nothing special beyond relying on that. If a future change
+    // ever swapped the effect deps for something that re-derives equality
+    // structurally (or added a field to the deps array that isn't part of
+    // `params`), this test would catch the regression.
+    vi.mocked(fetch).mockResolvedValue(fakeResponse(['data: {"type": "done"}\n\n']))
+
+    const params = { repoUrl: 'https://github.com/a/b', question: 'q' }
+    const { result, rerender } = renderHook(() => useAskStream(params))
+
+    await waitFor(() => expect(result.current.status).toBe('done'))
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    // Re-render the same hook instance, passing the identical params
+    // reference again (not a new object with equal fields).
+    rerender()
+    rerender()
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(result.current.status).toBe('done')
+    expect(result.current.events).toEqual([{ type: 'done' }])
+  })
+
   it('marks the connection as lost after 30s of no frames', async () => {
     // NOTE: adjusted from the brief's version in two ways.
     //
