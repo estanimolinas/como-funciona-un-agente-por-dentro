@@ -85,6 +85,13 @@ describe('EventLogLine', () => {
     expect(screen.queryByText(/\*\*bold\*\*/)).not.toBeInTheDocument()
   })
 
+  it('wraps the rendered markdown in the markdown-answer styling class', () => {
+    const { container } = render(
+      <EventLogLine event={{ type: 'answer_token', text: 'plain text' }} />,
+    )
+    expect(container.querySelector('.markdown-answer')).not.toBeNull()
+  })
+
   it('marks an answer_token as truncated when isTruncatedAnswer is set', () => {
     render(
       <EventLogLine

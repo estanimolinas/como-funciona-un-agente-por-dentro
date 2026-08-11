@@ -55,7 +55,9 @@ export function EventLogLine({ event, isTruncatedAnswer }: EventLogLineProps) {
     case 'answer_token':
       return (
         <div>
-          <ReactMarkdown>{event.text}</ReactMarkdown>
+          <div className="markdown-answer">
+            <ReactMarkdown>{event.text}</ReactMarkdown>
+          </div>
           {isTruncatedAnswer ? (
             <span className="text-amber-500"> [incompleto]</span>
           ) : null}
