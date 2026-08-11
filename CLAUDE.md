@@ -157,6 +157,18 @@ here:
   which could silently turn a real DB error into a wrong/`None` `chunk_id`
   — replaced with `apsw.Connection.last_insert_rowid()` directly.
 
+**The local-robustness plan (branch `worktree-local-robustness`) landed
+next:** structured JSON logging (`logging_config.py`, wired into both
+startup paths), fail-fast startup validation (`VOYAGE_API_KEY` required, via
+`config.py`'s `validate_settings`), retry/backoff on transient Voyage
+errors in `embeddings/voyage.py`'s `embed_batch`, an explicit 180s timeout
+on the orchestrator's `query()` call in `orchestrator/ask.py`, and a real,
+dry-run-verified README quickstart. Its own final whole-branch review then
+added logging to `orchestrator/indexing_service.py` and the previously-silent
+`except Exception` blocks in `api/ask_route.py` and `mcp_server/server.py`,
+so failures there actually show up in logs instead of just a generic 502/
+error string.
+
 What exists right now:
 - `coderag_mcp/api/main.py` — FastAPI app, `/health` endpoint, MCP server
   mounted at `/mcp` (behind `ApiKeyMiddleware`, see `api/auth.py` below).
@@ -323,8 +335,13 @@ current — they may describe the older `FastMCP`-based API.
   collide under parallel test execution (e.g. `pytest-xdist`).
 - `embeddings/voyage.py`'s `embed_batch` constructs the client lazily but
   still round-trips to Voyage synchronously inside whatever thread called
-  it — fine given the current `asyncio.to_thread` offload pattern, just
-  noting there's no batching/retry/backoff logic yet.
+  it — fine given the current `asyncio.to_thread` offload pattern. Retry/
+  backoff on transient errors now exists (local-robustness plan, see
+  "Current status" below), but batching — splitting a large chunk set into
+  multiple smaller requests instead of one large `embed_batch` call — is
+  still not implemented; a single call that exceeds Voyage's per-minute
+  token cap will exhaust retries quickly rather than actually recovering,
+  since backoff alone can't outlast a per-minute rate-limit window.
 - `_mcp_compat.py`'s monkeypatch (see above) and `get_connection()`'s
   `-> sqlite3.Connection` type hint (the real contract needs
   `_APSWWrapper`'s `.begin()`) are both documented-but-real landmines for

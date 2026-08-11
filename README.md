@@ -6,7 +6,7 @@ them in SQLite with the `sqlite-vec` extension (cosine similarity). Answers
 questions about the code, with file:line citations, via a Claude Agent SDK
 single-agent orchestrator that combines semantic search with exact file
 reading. Served both as a REST API (`POST /ask`) and as an MCP server
-(Streamable HTTP, mounted at `/mcp`), so it can be queried directly or
+(Streamable HTTP, mounted at `/mcp/`), so it can be queried directly or
 plugged into any MCP client (Claude Desktop, Claude.ai connectors, etc.).
 
 **Status:** REST (`POST /ask`) and MCP (`index_repo`, `search_code`,
@@ -24,6 +24,12 @@ is a LangChain/DeepAgents agent harness, this is a RAG/MCP service, with
 different stacks.
 
 ## Quickstart
+
+Requires the `claude` CLI installed and authenticated
+(`npm i -g @anthropic-ai/claude-code && claude login`), or `ANTHROPIC_API_KEY`
+exported — `POST /ask` and the `ask_repo` MCP tool run through the Claude
+Agent SDK, which drives this CLI as a subprocess. Without one of the two, a
+first `curl /ask` will fail.
 
 ```bash
 git clone https://github.com/<you>/coderag-mcp.git
@@ -72,9 +78,10 @@ curl -X POST http://localhost:8000/ask \
 
 ## MCP server
 
-An MCP server (Streamable HTTP transport) is mounted at `/mcp` on the same
-running app, subject to the same `X-API-Key` requirement described above.
-It exposes:
+An MCP server (Streamable HTTP transport) is mounted at `/mcp/` on the same
+running app (`/mcp` without the trailing slash 307-redirects to `/mcp/`;
+MCP clients follow redirects automatically), subject to the same
+`X-API-Key` requirement described above. It exposes:
 
 - `ping` — trivial health check.
 - `index_repo(repo_url)` — clone, chunk, embed, and store a public
