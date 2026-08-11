@@ -22,22 +22,36 @@ export function EventLogLine({ event, isTruncatedAnswer }: EventLogLineProps) {
         </div>
       )
     case 'no_semantic_index':
-      return <div className="text-amber-400">⚠ {event.message}</div>
+      return (
+        <div className="flex items-start gap-2 text-amber-400">
+          <span className="shrink-0">⚠</span>
+          <span>{event.message}</span>
+        </div>
+      )
     case 'tool_call':
       return (
-        <div className="text-sky-400">
-          → {event.tool}({JSON.stringify(event.input)})
+        <div className="flex items-start gap-2 overflow-x-auto whitespace-pre-wrap text-sky-400">
+          <span className="shrink-0">→</span>
+          <span>{event.tool}({JSON.stringify(event.input)})</span>
         </div>
       )
     case 'tool_result':
       return (
-        <div className={event.is_error ? 'text-red-400' : 'text-emerald-400'}>
-          {event.is_error ? '✗' : '✓'} {event.tool}: {event.output_preview}
-          {event.is_error ? ' (error)' : ''}
+        <div
+          className={
+            'flex items-start gap-2 overflow-x-auto whitespace-pre-wrap ' +
+            (event.is_error ? 'text-red-400' : 'text-emerald-400')
+          }
+        >
+          <span className="shrink-0">{event.is_error ? '✗' : '✓'}</span>
+          <span>
+            {event.tool}: {event.output_preview}
+            {event.is_error ? ' (error)' : ''}
+          </span>
         </div>
       )
     case 'reasoning':
-      return <div className="italic text-slate-500">{event.text}</div>
+      return <div className="italic text-violet-400">{event.text}</div>
     case 'answer_token':
       return (
         <div>

@@ -50,9 +50,12 @@ describe('EventLogLine', () => {
     expect(screen.getByText(/error/i)).toBeInTheDocument()
   })
 
-  it('renders reasoning text', () => {
-    render(<EventLogLine event={{ type: 'reasoning', text: 'thinking about auth' }} />)
+  it('renders reasoning text in violet', () => {
+    const { container } = render(
+      <EventLogLine event={{ type: 'reasoning', text: 'thinking about auth' }} />,
+    )
     expect(screen.getByText(/thinking about auth/)).toBeInTheDocument()
+    expect(container.querySelector('.text-violet-400')).not.toBeNull()
   })
 
   it('renders an answer_token', () => {
