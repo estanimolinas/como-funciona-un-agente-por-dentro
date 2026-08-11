@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest'
 import App from './App'
 
 describe('App', () => {
-  it('renders the app heading', () => {
+  it('renders the page heading and the repo form', () => {
     render(<App />)
     expect(screen.getByText('coderag-mcp')).toBeInTheDocument()
+    expect(screen.getByLabelText(/repo url/i)).toBeInTheDocument()
   })
 })
