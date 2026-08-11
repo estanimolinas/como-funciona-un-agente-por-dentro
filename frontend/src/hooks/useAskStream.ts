@@ -52,6 +52,17 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
     setEvents([])
     setStatus('connecting')
 
+    // Actually cancels the in-flight request, including during the window
+    // before `fetch()` has resolved and before any reader exists — unlike
+    // `readerRef`-based cancellation (below), which can only act once a
+    // reader has been created. This matters because React 19 StrictMode
+    // (see main.tsx) double-invokes this effect (setup -> cleanup -> setup)
+    // on every mount, and the first invocation's cleanup runs synchronously,
+    // long before its `fetch()` promise settles — without this, the first,
+    // discarded request's `fetch` keeps running to completion server-side
+    // (a full clone + embed + orchestrator run) for a caller nobody wants.
+    const controller = new AbortController()
+
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (params.apiKey) {
       headers['X-API-Key'] = params.apiKey
@@ -71,13 +82,22 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
           method: 'POST',
           headers,
           body: JSON.stringify({ repo_url: params!.repoUrl, question: params!.question }),
+          signal: controller.signal,
         })
+
+        // Defensive second check: cleanup may have run (and called
+        // controller.abort()) while this fetch was resolving, in the
+        // narrow window between abort firing and the fetch promise actually
+        // rejecting. If so, don't start consuming the body.
+        if (cancelled) {
+          void response.body?.cancel()
+          return
+        }
 
         if (!response.body) {
           throw new Error('Response has no body')
         }
 
-        if (cancelled) return
         setStatus('streaming')
 
         const reader = response.body.getReader()
@@ -126,6 +146,15 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
         }
       } catch (err) {
         if (cancelled) return
+        // An aborted request (via controller.abort() in cleanup, below) is
+        // expected teardown, not a stream failure — the caller no longer
+        // wants this run, possibly because a new one already started.
+        // Pushing an 'error' event here would be misleading (and could land
+        // on an unmounted component or a since-replaced run).
+        const isAbort =
+          (err instanceof DOMException && err.name === 'AbortError') ||
+          (err instanceof Error && err.name === 'AbortError')
+        if (isAbort) return
         const message = err instanceof Error ? err.message : String(err)
         setStatus('error')
         setEvents((prev) => [...prev, { type: 'error', message }])
@@ -140,7 +169,14 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
 
     return () => {
       cancelled = true
-      // Actually stop the underlying network read, not just suppress
+      // Primary cancellation path: aborts the fetch itself, which works
+      // even before a reader exists (e.g. StrictMode's synchronous
+      // setup->cleanup->setup, which runs before the first fetch() has
+      // resolved). See the AbortController comment above.
+      controller.abort()
+      // Belt-and-suspenders: if a reader already exists by the time
+      // cleanup runs (fetch already resolved), also cancel it directly.
+      // Actually stops the underlying network read, not just suppress
       // further state writes — otherwise the fetch/read loop (and any live
       // readWithTimeout timer) keeps running in the background until the
       // server closes the stream or the 30s inactivity timeout fires.

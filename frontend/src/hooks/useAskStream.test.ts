@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -223,5 +224,73 @@ describe('useAskStream', () => {
     ])
 
     setTimeoutSpy.mockRestore()
+  })
+
+  it('aborts the discarded first request under StrictMode double-invocation', async () => {
+    // Regression test for a real bug: the app renders <App /> inside
+    // <StrictMode> (see main.tsx), which double-invokes every effect
+    // (setup -> cleanup -> setup) in dev mode to surface cleanup bugs.
+    // React runs this synchronously as part of mount, so `fetch()` is
+    // genuinely called twice — that part can't be (and shouldn't be)
+    // avoided. What the bug was: the *first* invocation's cleanup could
+    // not actually cancel its fetch (readerRef.current was still null —
+    // the reader is only created after the fetch promise resolves), so the
+    // discarded first request's server-side work (a full clone + embed +
+    // orchestrator run) kept running to completion for nobody. The fix
+    // uses an AbortController created at the top of the effect and aborted
+    // in cleanup, which works even before a reader exists — proven here by
+    // asserting the *first* call's signal was actually aborted, while the
+    // surviving second call was not, and that the hook's final state
+    // reflects only the second (real) run, with no spurious 'error' event
+    // from the aborted first one. `renderHook`/`render` don't wrap in
+    // StrictMode by default, so this must be done explicitly via the
+    // `wrapper` option — the existing suite's plain `renderHook` calls
+    // would never have caught this.
+    //
+    // The mock must actually honor the AbortSignal passed in fetch's
+    // `init`, the same way a real fetch would — otherwise this test can't
+    // distinguish "the discarded first request got cancelled" (the fix)
+    // from "the discarded first request ran to completion but its result
+    // was merely ignored" (the bug), since vi.fn()'s default
+    // mockResolvedValue ignores the signal entirely.
+    vi.mocked(fetch).mockImplementation(
+      (_input, init) =>
+        new Promise((resolve, reject) => {
+          const signal = init?.signal
+          if (signal?.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'))
+            return
+          }
+          signal?.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'))
+          })
+          resolve(
+            fakeResponse([
+              'data: {"type": "answer_token", "text": "hi"}\n\n',
+              'data: {"type": "done"}\n\n',
+            ]),
+          )
+        }),
+    )
+
+    const params = { repoUrl: 'https://github.com/a/b', question: 'q' }
+    const { result } = renderHook(() => useAskStream(params), {
+      wrapper: StrictMode,
+    })
+
+    await waitFor(() => expect(result.current.status).toBe('done'))
+
+    expect(fetch).toHaveBeenCalledTimes(2)
+    const [, firstInit] = vi.mocked(fetch).mock.calls[0]
+    const [, secondInit] = vi.mocked(fetch).mock.calls[1]
+    expect(firstInit?.signal?.aborted).toBe(true)
+    expect(secondInit?.signal?.aborted).toBe(false)
+
+    // Only the surviving (second) request's events should be reflected —
+    // no leftover/duplicate/error state from the aborted first request.
+    expect(result.current.events).toEqual([
+      { type: 'answer_token', text: 'hi' },
+      { type: 'done' },
+    ])
   })
 })
