@@ -1,10 +1,20 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RepoForm } from './RepoForm'
 
 describe('RepoForm', () => {
+  // RepoForm seeds its apiKey field from localStorage on mount, and one of
+  // the tests below submits a form with an API key, which writes it to
+  // localStorage. jsdom's localStorage persists across tests within a file
+  // (not reset automatically between tests), so without this, an earlier
+  // test's assertion that submitting without an API key produces
+  // `apiKey: undefined` would only pass because of test execution order.
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
   it('calls onSubmit with the entered repo URL and question', async () => {
     const onSubmit = vi.fn()
     const user = userEvent.setup()

@@ -34,6 +34,8 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
     const trimmedApiKey = apiKey.trim()
     if (trimmedApiKey) {
       localStorage.setItem('coderag_api_key', trimmedApiKey)
+    } else {
+      localStorage.removeItem('coderag_api_key')
     }
 
     onSubmit({
