@@ -1,5 +1,5 @@
 from coderag_mcp.indexing.models import Chunk
-from coderag_mcp.store.chunks import insert_chunks, search_chunks
+from coderag_mcp.store.chunks import count_chunks, insert_chunks, search_chunks
 from coderag_mcp.store.db import get_connection, init_schema
 from coderag_mcp.store.repos import create_repo
 
@@ -80,3 +80,15 @@ def test_insert_chunks_rolls_back_on_failure(tmp_path):
     # Verify both chunks are now in the DB
     result = conn.execute("SELECT COUNT(*) FROM chunks WHERE repo_id = ?", (repo_id,)).fetchone()
     assert result[0] == 2, "Expected 2 chunks after successful insert"
+
+
+def test_count_chunks_returns_the_number_of_stored_chunks(tmp_path):
+    conn = get_connection(str(tmp_path / "test.db"))
+    init_schema(conn, dim=4)
+    repo_id = create_repo(conn, "https://github.com/a/b")
+
+    assert count_chunks(conn, repo_id) == 0
+
+    insert_chunks(conn, repo_id, [_chunk("a"), _chunk("b")], [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]])
+
+    assert count_chunks(conn, repo_id) == 2

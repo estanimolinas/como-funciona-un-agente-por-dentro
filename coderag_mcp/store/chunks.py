@@ -95,3 +95,9 @@ def search_chunks(
     ]
     results.sort(key=lambda r: r.distance)
     return results
+
+
+def count_chunks(conn: sqlite3.Connection, repo_id: int) -> int:
+    """Number of chunks stored for repo_id - used to report indexing progress."""
+    row = conn.execute("SELECT COUNT(*) FROM chunks WHERE repo_id = ?", (repo_id,)).fetchone()
+    return row[0]

@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from coderag_mcp.api.ask_route import router as ask_router
+from coderag_mcp.api.ask_stream_route import router as ask_stream_router
 from coderag_mcp.api.auth import ApiKeyMiddleware
 from coderag_mcp.config import get_settings, validate_settings
 from coderag_mcp.logging_config import configure_logging
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="CodeRAG-MCP", lifespan=lifespan)
     app.mount("/mcp", mcp_app)
     app.include_router(ask_router)
+    app.include_router(ask_stream_router)
 
     @app.get("/health")
     def health() -> dict[str, str]:
