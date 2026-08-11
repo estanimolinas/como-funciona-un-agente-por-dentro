@@ -92,6 +92,12 @@ async def ask_stream(
         # real answer text.
         block_types: dict[int, str] = {}
 
+        # Maps each ToolUseBlock's id to its tool name, so a later ToolResultBlock
+        # (which only carries tool_use_id) can be enriched with the tool name that
+        # produced it - a consumer of the "tool_result" event otherwise has no way
+        # to correlate it back to which tool ran.
+        tool_names_by_id: dict[str, str] = {}
+
         # True once at least one answer_token has been emitted from a StreamEvent
         # text_delta. When the SDK streams partial messages (the normal case, since
         # include_partial_messages=True above), answer text arrives token-by-token
@@ -103,6 +109,14 @@ async def ask_stream(
         streamed_any_text = False
 
         try:
+            # NOTE: this generator can be suspended (at a `yield` below) inside a
+            # caller's frame - e.g. while StreamingResponse is writing a chunk to a
+            # socket - at the moment this timeout fires. In that rare case,
+            # asyncio.CancelledError may surface directly to the consumer instead of
+            # being converted to TimeoutError by this `async with` block's
+            # __aexit__, bypassing the `except TimeoutError` handler below. Most wall
+            # time is spent awaiting inside query() itself, where the conversion
+            # works correctly, so this is a low-probability edge case, not a fix.
             async with asyncio.timeout(timeout_s):
                 async for message in query(prompt=question, options=options):
                     if isinstance(message, StreamEvent):
@@ -127,6 +141,7 @@ async def ask_stream(
                             if isinstance(block, ThinkingBlock):
                                 yield {"type": "reasoning", "text": block.thinking}
                             elif isinstance(block, ToolUseBlock):
+                                tool_names_by_id[block.id] = block.name
                                 yield {"type": "tool_call", "tool": block.name, "input": block.input}
                             elif isinstance(block, TextBlock) and not streamed_any_text:
                                 yield {"type": "answer_token", "text": block.text}
@@ -137,8 +152,10 @@ async def ask_stream(
                             if isinstance(block, ToolResultBlock):
                                 yield {
                                     "type": "tool_result",
+                                    "tool": tool_names_by_id.get(block.tool_use_id),
                                     "tool_use_id": block.tool_use_id,
                                     "output_preview": _preview(block.content),
+                                    "is_error": block.is_error,
                                 }
                         continue
         except TimeoutError:

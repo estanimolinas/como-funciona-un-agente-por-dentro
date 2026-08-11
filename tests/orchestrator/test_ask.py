@@ -117,7 +117,13 @@ async def test_ask_stream_yields_one_event_per_block(tmp_path):
     assert events == [
         {"type": "reasoning", "text": "Let me check the code."},
         {"type": "tool_call", "tool": "Glob", "input": {"pattern": "*.py"}},
-        {"type": "tool_result", "tool_use_id": "toolu_1", "output_preview": "main.py"},
+        {
+            "type": "tool_result",
+            "tool": "Glob",
+            "tool_use_id": "toolu_1",
+            "output_preview": "main.py",
+            "is_error": None,
+        },
         {"type": "answer_token", "text": "Auth is "},
         {"type": "answer_token", "text": "in main.py."},
         {"type": "done"},
