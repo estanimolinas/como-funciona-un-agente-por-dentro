@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 
 import type { AskStreamParams } from '../types'
+import { OffsetCard } from './OffsetCard'
 
 interface RepoFormProps {
   onSubmit: (params: AskStreamParams) => void
@@ -51,6 +52,7 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
   }
 
   return (
+    <OffsetCard className="p-6">
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1">
         <span>URL del repo</span>
@@ -58,7 +60,7 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
           value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
           placeholder="https://github.com/owner/repo"
-          className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
+          className="rounded border-2 border-slate-700 bg-slate-900 px-3 py-2 focus:border-amber-400 focus:outline-none"
         />
       </label>
       <label className="flex flex-col gap-1">
@@ -67,7 +69,7 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="¿Cómo funciona X?"
-          className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
+          className="rounded border-2 border-slate-700 bg-slate-900 px-3 py-2 focus:border-amber-400 focus:outline-none"
         />
       </label>
       <button
@@ -78,15 +80,20 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
         {showApiKey ? 'Ocultar' : 'Agregar'} API key (opcional)
       </button>
       {showApiKey ? (
-        <label className="flex flex-col gap-1">
-          <span>API key</span>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
-          />
-        </label>
+        <>
+          <label className="flex flex-col gap-1">
+            <span>API key</span>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="rounded border-2 border-slate-700 bg-slate-900 px-3 py-2 focus:border-amber-400 focus:outline-none"
+            />
+          </label>
+          <p className="text-xs text-slate-500">
+            Opcional — solo necesario si tu servidor tiene CODERAG_API_KEY configurada.
+          </p>
+        </>
       ) : null}
       <div className="flex flex-wrap gap-2">
         {EXAMPLES.map((example) => (
@@ -94,7 +101,7 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
             key={example.label}
             type="button"
             onClick={() => fillExample(example)}
-            className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400"
+            className="rounded border-2 border-amber-700 bg-amber-950 px-2 py-1 text-xs text-amber-100 hover:bg-amber-900"
           >
             Probar: {example.label}
           </button>
@@ -102,10 +109,11 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
       </div>
       <button
         type="submit"
-        className="self-start rounded bg-sky-600 px-4 py-2 font-semibold text-white"
+        className="self-start rounded border-2 border-slate-100 bg-amber-500 px-4 py-2 font-semibold text-slate-950 hover:bg-amber-400"
       >
         Preguntar
       </button>
     </form>
+    </OffsetCard>
   )
 }

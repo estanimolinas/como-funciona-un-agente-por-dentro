@@ -72,4 +72,16 @@ describe('RepoForm', () => {
 
     expect(onSubmit).not.toHaveBeenCalled()
   })
+
+  it('shows an always-visible explanation when the API key field is expanded', async () => {
+    const onSubmit = vi.fn()
+    const user = userEvent.setup()
+    render(<RepoForm onSubmit={onSubmit} />)
+
+    expect(screen.queryByText(/CODERAG_API_KEY/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /agregar/i }))
+
+    expect(screen.getByText(/opcional.*CODERAG_API_KEY.*configurada/i)).toBeInTheDocument()
+  })
 })
