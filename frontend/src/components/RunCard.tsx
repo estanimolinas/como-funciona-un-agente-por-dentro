@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 
 import { useAskStream } from '../hooks/useAskStream'
-import { EventLogLine } from './EventLogLine'
 import { OffsetCard } from './OffsetCard'
-import type { AskStreamParams, StreamEvent } from '../types'
+import { TwoColumnLog } from './TwoColumnLog'
+import type { AskStreamParams } from '../types'
 
 interface RunCardProps {
   repoUrl: string
@@ -26,47 +26,13 @@ export function RunCard({ repoUrl, question, apiKey }: RunCardProps) {
   const hasError = events.some((e) => e.type === 'error')
   const isTruncated = hasError && !hasDone
 
-  // answer_token events arrive one token at a time and are meant to read
-  // as a single growing answer, not one log line per token — accumulate
-  // consecutive runs of them into a single synthetic event so EventLogLine
-  // renders one merged text node per run, while every other event type
-  // still gets its own line in original order.
-  const renderItems: { key: string; event: StreamEvent }[] = []
-  let pendingAnswer = ''
-  let pendingKey: string | null = null
-  events.forEach((event, i) => {
-    if (event.type === 'answer_token') {
-      pendingAnswer += event.text
-      pendingKey ??= `answer-${i}`
-    } else {
-      if (pendingKey !== null) {
-        renderItems.push({ key: pendingKey, event: { type: 'answer_token', text: pendingAnswer } })
-        pendingAnswer = ''
-        pendingKey = null
-      }
-      renderItems.push({ key: String(i), event })
-    }
-  })
-  if (pendingKey !== null) {
-    renderItems.push({ key: pendingKey, event: { type: 'answer_token', text: pendingAnswer } })
-  }
-
   return (
     <OffsetCard className="p-4">
       <div className="mb-2 text-sm text-slate-400">
         {repoUrl} — {question}
       </div>
       <p className="mb-2 text-xs text-slate-400">Así explora y responde el agente, en vivo:</p>
-      <div className="flex flex-col gap-2 font-mono text-sm">
-        {status === 'connecting' ? <div className="text-slate-500">Conectando...</div> : null}
-        {renderItems.map(({ key, event }) => (
-          <EventLogLine
-            key={key}
-            event={event}
-            isTruncatedAnswer={isTruncated && event.type === 'answer_token'}
-          />
-        ))}
-      </div>
+      <TwoColumnLog events={events} status={status} isTruncated={isTruncated} />
     </OffsetCard>
   )
 }
