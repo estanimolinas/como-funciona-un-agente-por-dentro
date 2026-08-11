@@ -53,7 +53,7 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1">
-        <span>Repo URL</span>
+        <span>URL del repo</span>
         <input
           value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
@@ -62,11 +62,11 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span>Question</span>
+        <span>Pregunta</span>
         <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="How does X work?"
+          placeholder="¿Cómo funciona X?"
           className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
         />
       </label>
@@ -75,7 +75,7 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
         onClick={() => setShowApiKey((v) => !v)}
         className="self-start text-sm text-slate-400 underline"
       >
-        {showApiKey ? 'Hide' : 'Add'} API key (optional)
+        {showApiKey ? 'Ocultar' : 'Agregar'} API key (opcional)
       </button>
       {showApiKey ? (
         <label className="flex flex-col gap-1">
@@ -96,7 +96,7 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
             onClick={() => fillExample(example)}
             className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400"
           >
-            Try: {example.label}
+            Probar: {example.label}
           </button>
         ))}
       </div>
@@ -104,7 +104,7 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
         type="submit"
         className="self-start rounded bg-sky-600 px-4 py-2 font-semibold text-white"
       >
-        Ask
+        Preguntar
       </button>
     </form>
   )

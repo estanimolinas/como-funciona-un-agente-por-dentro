@@ -20,9 +20,9 @@ describe('RepoForm', () => {
     const user = userEvent.setup()
     render(<RepoForm onSubmit={onSubmit} />)
 
-    await user.type(screen.getByLabelText(/repo url/i), 'https://github.com/pypa/sampleproject')
-    await user.type(screen.getByLabelText(/question/i), 'How is the version defined?')
-    await user.click(screen.getByRole('button', { name: /ask/i }))
+    await user.type(screen.getByLabelText(/url del repo/i), 'https://github.com/pypa/sampleproject')
+    await user.type(screen.getByLabelText(/pregunta/i), 'How is the version defined?')
+    await user.click(screen.getByRole('button', { name: /preguntar/i }))
 
     expect(onSubmit).toHaveBeenCalledWith({
       repoUrl: 'https://github.com/pypa/sampleproject',
@@ -36,11 +36,11 @@ describe('RepoForm', () => {
     const user = userEvent.setup()
     render(<RepoForm onSubmit={onSubmit} />)
 
-    await user.type(screen.getByLabelText(/repo url/i), 'https://github.com/a/b')
-    await user.type(screen.getByLabelText(/question/i), 'q')
-    await user.click(screen.getByRole('button', { name: /add/i }))
+    await user.type(screen.getByLabelText(/url del repo/i), 'https://github.com/a/b')
+    await user.type(screen.getByLabelText(/pregunta/i), 'q')
+    await user.click(screen.getByRole('button', { name: /agregar/i }))
     await user.type(screen.getByLabelText(/api key/i), 'secret-key')
-    await user.click(screen.getByRole('button', { name: /ask/i }))
+    await user.click(screen.getByRole('button', { name: /preguntar/i }))
 
     expect(onSubmit).toHaveBeenCalledWith({
       repoUrl: 'https://github.com/a/b',
@@ -54,10 +54,10 @@ describe('RepoForm', () => {
     const user = userEvent.setup()
     render(<RepoForm onSubmit={onSubmit} />)
 
-    await user.click(screen.getAllByRole('button', { name: /try:/i })[0])
+    await user.click(screen.getAllByRole('button', { name: /probar:/i })[0])
 
-    const repoUrlInput = screen.getByLabelText(/repo url/i) as HTMLInputElement
-    const questionInput = screen.getByLabelText(/question/i) as HTMLInputElement
+    const repoUrlInput = screen.getByLabelText(/url del repo/i) as HTMLInputElement
+    const questionInput = screen.getByLabelText(/pregunta/i) as HTMLInputElement
     expect(repoUrlInput.value).not.toBe('')
     expect(questionInput.value).not.toBe('')
   })
@@ -67,8 +67,8 @@ describe('RepoForm', () => {
     const user = userEvent.setup()
     render(<RepoForm onSubmit={onSubmit} />)
 
-    await user.type(screen.getByLabelText(/question/i), 'q')
-    await user.click(screen.getByRole('button', { name: /ask/i }))
+    await user.type(screen.getByLabelText(/pregunta/i), 'q')
+    await user.click(screen.getByRole('button', { name: /preguntar/i }))
 
     expect(onSubmit).not.toHaveBeenCalled()
   })

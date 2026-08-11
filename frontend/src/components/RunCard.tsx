@@ -56,7 +56,7 @@ export function RunCard({ repoUrl, question, apiKey }: RunCardProps) {
         {repoUrl} — {question}
       </div>
       <div className="flex flex-col gap-2 font-mono text-sm">
-        {status === 'connecting' ? <div className="text-slate-500">Connecting...</div> : null}
+        {status === 'connecting' ? <div className="text-slate-500">Conectando...</div> : null}
         {renderItems.map(({ key, event }) => (
           <EventLogLine
             key={key}

@@ -7,7 +7,7 @@ import type { StreamEvent } from '../types'
 describe('EventLogLine', () => {
   it('renders indexing_start', () => {
     render(<EventLogLine event={{ type: 'indexing_start', repo_url: 'https://github.com/a/b' }} />)
-    expect(screen.getByText(/indexing/i)).toBeInTheDocument()
+    expect(screen.getByText(/indexando/i)).toBeInTheDocument()
     expect(screen.getByText(/a\/b|https:\/\/github.com\/a\/b/)).toBeInTheDocument()
   })
 
@@ -92,7 +92,7 @@ describe('EventLogLine', () => {
         isTruncatedAnswer
       />,
     )
-    expect(screen.getByText(/incomplete/i)).toBeInTheDocument()
+    expect(screen.getByText(/incompleto/i)).toBeInTheDocument()
   })
 
   it('renders nothing visible for a done event', () => {

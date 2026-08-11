@@ -12,13 +12,13 @@ export function EventLogLine({ event, isTruncatedAnswer }: EventLogLineProps) {
     case 'indexing_start':
       return (
         <div className="text-slate-400">
-          Indexing {event.repo_url}...
+          Indexando {event.repo_url}...
         </div>
       )
     case 'indexing_done':
       return (
         <div className="text-slate-400">
-          Indexed {event.chunk_count} chunks in {event.duration_s}s
+          Indexado {event.chunk_count} chunks en {event.duration_s}s
         </div>
       )
     case 'no_semantic_index':
@@ -57,7 +57,7 @@ export function EventLogLine({ event, isTruncatedAnswer }: EventLogLineProps) {
         <div>
           <ReactMarkdown>{event.text}</ReactMarkdown>
           {isTruncatedAnswer ? (
-            <span className="text-amber-500"> [incomplete]</span>
+            <span className="text-amber-500"> [incompleto]</span>
           ) : null}
         </div>
       )
