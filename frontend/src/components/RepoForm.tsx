@@ -63,6 +63,10 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
             className="rounded border-2 border-slate-700 bg-slate-900 px-3 py-2 focus:border-amber-400 focus:outline-none"
           />
         </label>
+        <p className="text-xs text-slate-500">
+          Búsqueda semántica disponible solo para repos Python — otros
+          lenguajes usan exploración directa de archivos.
+        </p>
         <label className="flex flex-col gap-1">
           <span>Pregunta</span>
           <input
@@ -91,7 +95,9 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
               />
             </label>
             <p className="text-xs text-slate-400">
-              Opcional — solo necesario si tu servidor tiene CODERAG_API_KEY configurada.
+              CODERAG_API_KEY es una variable de entorno opcional que quien
+              corre este backend puede configurar para protegerlo. Si vos
+              no la configuraste, dejá este campo vacío.
             </p>
           </>
         ) : null}

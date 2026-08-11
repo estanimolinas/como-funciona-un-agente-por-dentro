@@ -13,7 +13,8 @@ describe('App', () => {
     expect(
       screen.getByText((_, element) => element?.tagName.toLowerCase() === 'h1' && element.textContent === 'AgentTrace'),
     ).toBeInTheDocument()
-    expect(screen.getByText(/mirá en vivo cómo el agente explora el código/i)).toBeInTheDocument()
+    expect(screen.getByText(/pegá la url de un repo público/i)).toBeInTheDocument()
+    expect(screen.getByText(/leé la respuesta final/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/url del repo/i)).toBeInTheDocument()
   })
 })

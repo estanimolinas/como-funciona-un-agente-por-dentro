@@ -88,6 +88,11 @@ describe('RepoForm', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('always shows a note that semantic search only applies to Python repos', () => {
+    render(<RepoForm onSubmit={vi.fn()} />)
+    expect(screen.getByText(/solo para repos python/i)).toBeInTheDocument()
+  })
+
   it('shows an always-visible explanation when the API key field is expanded', async () => {
     const onSubmit = vi.fn()
     const user = userEvent.setup()
@@ -97,6 +102,7 @@ describe('RepoForm', () => {
 
     await user.click(screen.getByRole('button', { name: /agregar/i }))
 
-    expect(screen.getByText(/opcional.*CODERAG_API_KEY.*configurada/i)).toBeInTheDocument()
+    expect(screen.getByText(/CODERAG_API_KEY/)).toBeInTheDocument()
+    expect(screen.getByText(/dejá este campo vacío/i)).toBeInTheDocument()
   })
 })
