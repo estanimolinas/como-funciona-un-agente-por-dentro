@@ -44,6 +44,47 @@ async def test_ask_concatenates_streamed_text_and_scopes_cwd(tmp_path):
     mock_cleanup.assert_called_once_with(tmp_path)
 
 
+async def _fake_query_stream_with_agenttrace_markers(*, prompt, options):
+    yield AssistantMessage(
+        content=[
+            TextBlock(
+                text=(
+                    "Auth is handled in auth.py:10-20.\n"
+                    "@@AGENTTRACE:RAG@@\n"
+                    "Used semantic search because the question was conceptual.\n"
+                    "@@AGENTTRACE:END@@"
+                )
+            )
+        ],
+        model="test",
+    )
+
+
+@pytest.mark.asyncio
+async def test_ask_strips_agenttrace_markers_from_returned_answer(tmp_path):
+    """ask() is a plain-text consumer (POST /ask, ask_repo MCP tool) with no
+    marker-parsing of its own, unlike the frontend's splitAgentExplanations() -
+    it must strip the trailing @@AGENTTRACE:...@@ block before returning."""
+    conn = MagicMock()
+
+    with (
+        patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
+        patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
+        patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.count_chunks", return_value=5),
+        patch(
+            "coderag_mcp.orchestrator.ask.query",
+            side_effect=_fake_query_stream_with_agenttrace_markers,
+        ),
+    ):
+        answer = await ask(
+            conn, repo_id=1, repo_url="https://github.com/a/b", question="how does auth work?"
+        )
+
+    assert answer == "Auth is handled in auth.py:10-20."
+    assert "@@AGENTTRACE" not in answer
+
+
 async def _hanging_query_stream(*, prompt, options):
     # Never yields - simulates a stuck claude CLI subprocess.
     await asyncio.sleep(10)

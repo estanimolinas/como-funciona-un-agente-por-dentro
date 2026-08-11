@@ -30,6 +30,26 @@ logger = logging.getLogger(__name__)
 
 _PREVIEW_LIMIT = 400
 
+# These marker strings are a cross-layer contract with the frontend's
+# splitAgentExplanations() (frontend/src/lib/splitAgentExplanations.ts) - the
+# orchestrator's system prompt (agents.py's ORCHESTRATOR_SYSTEM_PROMPT) instructs
+# the model to emit them verbatim. Changing them here without changing them there
+# (or vice versa) silently breaks marker parsing with no test failure on either
+# side, since the two layers aren't otherwise linked.
+_AGENTTRACE_MARKERS = ("@@AGENTTRACE:RAG@@", "@@AGENTTRACE:TOOLS@@")
+
+
+def _strip_agenttrace_markers(answer: str) -> str:
+    """ask_stream()'s consumers (POST /ask/stream's frontend) parse the
+    @@AGENTTRACE:...@@ marker block themselves; ask() is a plain-text consumer
+    (POST /ask, the ask_repo MCP tool) that has no such parsing, so it must strip
+    the block here instead of leaking raw markers to those clients.
+    """
+    indices = [i for i in (answer.find(m) for m in _AGENTTRACE_MARKERS) if i != -1]
+    if not indices:
+        return answer
+    return answer[: min(indices)].rstrip()
+
 
 def _preview(content: str | list[dict] | None, repo_dir: str) -> str:
     """Render a ToolResultBlock's content as a short, truncated preview string.
@@ -219,4 +239,4 @@ async def ask(
     async for event in ask_stream(conn, repo_id, repo_url, question, timeout_s=timeout_s):
         if event["type"] == "answer_token":
             answer_parts.append(event["text"])
-    return "".join(answer_parts)
+    return _strip_agenttrace_markers("".join(answer_parts))
