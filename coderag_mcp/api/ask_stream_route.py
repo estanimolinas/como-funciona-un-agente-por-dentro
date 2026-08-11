@@ -52,7 +52,7 @@ async def _stream_events(conn: sqlite3.Connection, request: AskRequest) -> Async
             yield _sse({
                 "type": "indexing_done",
                 "chunk_count": chunk_count,
-                "duration_s": time.monotonic() - start,
+                "duration_s": round(time.monotonic() - start, 2),
             })
         else:
             repo_id = existing_id

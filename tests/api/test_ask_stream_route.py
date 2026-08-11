@@ -77,6 +77,9 @@ def test_ask_stream_indexes_then_streams_orchestrator_events(client):
     ]
     assert events[0]["repo_url"] == "https://github.com/a/b"
     assert events[2]["tool"] == "search_code"
+    duration = events[1]["duration_s"]
+    assert isinstance(duration, float)
+    assert round(duration, 2) == duration
 
 
 def test_ask_stream_skips_indexing_events_on_cache_hit(client):

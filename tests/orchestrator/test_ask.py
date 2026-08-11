@@ -238,3 +238,32 @@ async def test_ask_stream_omits_no_semantic_index_event_when_chunks_exist(tmp_pa
 
     assert all(event["type"] != "no_semantic_index" for event in events)
     assert "no indexed code" not in _reasoning_capturing_query_stream.captured_system_prompt
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_strips_clone_dir_prefix_from_tool_result_preview(tmp_path):
+    conn = MagicMock()
+    absolute_match_line = f"{tmp_path}/README.md:3:some matched text"
+
+    async def _one_tool_result(*, prompt, options):
+        yield AssistantMessage(
+            content=[ToolUseBlock(id="toolu_1", name="Grep", input={"pattern": "text"})],
+            model="test",
+        )
+        yield UserMessage(content=[ToolResultBlock(tool_use_id="toolu_1", content=absolute_match_line)])
+
+    with (
+        patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
+        patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
+        patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.count_chunks", return_value=5),
+        patch("coderag_mcp.orchestrator.ask.query", side_effect=_one_tool_result),
+    ):
+        events = [
+            event
+            async for event in ask_stream(conn, repo_id=1, repo_url="https://github.com/a/b", question="?")
+        ]
+
+    tool_result_event = next(e for e in events if e["type"] == "tool_result")
+    assert tool_result_event["output_preview"] == "README.md:3:some matched text"
+    assert str(tmp_path) not in tool_result_event["output_preview"]

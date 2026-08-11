@@ -31,12 +31,17 @@ logger = logging.getLogger(__name__)
 _PREVIEW_LIMIT = 400
 
 
-def _preview(content: str | list[dict] | None) -> str:
+def _preview(content: str | list[dict] | None, repo_dir: str) -> str:
     """Render a ToolResultBlock's content as a short, truncated preview string.
 
     content is str for most tools (Read, Glob, Grep, search_code all return plain
     text), but the SDK's type allows a list of content-block dicts too - handle both
     rather than assuming, since ToolResultBlock.content's type hint permits either.
+
+    repo_dir is the absolute path Read/Grep/Glob operate under (ClaudeAgentOptions'
+    cwd) - their raw output can include it verbatim, leaking the server's temp
+    directory layout to the client; strip it so previews show paths relative to the
+    repo root instead.
     """
     if content is None:
         text = ""
@@ -46,6 +51,7 @@ def _preview(content: str | list[dict] | None) -> str:
         text = "\n".join(
             block.get("text", "") for block in content if isinstance(block, dict)
         )
+    text = text.replace(repo_dir + "/", "")
     if len(text) > _PREVIEW_LIMIT:
         return text[:_PREVIEW_LIMIT] + "... (truncated)"
     return text
@@ -175,7 +181,7 @@ async def ask_stream(
                                     "type": "tool_result",
                                     "tool": tool_names_by_id.get(block.tool_use_id),
                                     "tool_use_id": block.tool_use_id,
-                                    "output_preview": _preview(block.content),
+                                    "output_preview": _preview(block.content, str(repo_dir)),
                                     "is_error": block.is_error,
                                 }
                         continue
