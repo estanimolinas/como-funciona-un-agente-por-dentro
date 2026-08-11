@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import { useAskStream } from '../hooks/useAskStream'
 import { EventLogLine } from './EventLogLine'
+import { OffsetCard } from './OffsetCard'
 import type { AskStreamParams, StreamEvent } from '../types'
 
 interface RunCardProps {
@@ -51,10 +52,11 @@ export function RunCard({ repoUrl, question, apiKey }: RunCardProps) {
   }
 
   return (
-    <div className="rounded border border-slate-800 p-4">
+    <OffsetCard className="p-4">
       <div className="mb-2 text-sm text-slate-400">
         {repoUrl} — {question}
       </div>
+      <p className="mb-2 text-xs text-slate-500">Así explora y responde el agente, en vivo:</p>
       <div className="flex flex-col gap-2 font-mono text-sm">
         {status === 'connecting' ? <div className="text-slate-500">Conectando...</div> : null}
         {renderItems.map(({ key, event }) => (
@@ -65,6 +67,6 @@ export function RunCard({ repoUrl, question, apiKey }: RunCardProps) {
           />
         ))}
       </div>
-    </div>
+    </OffsetCard>
   )
 }

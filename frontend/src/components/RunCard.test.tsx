@@ -61,4 +61,11 @@ describe('RunCard', () => {
     await screen.findByText(/boom/)
     expect(screen.getByText(/incompleto/i)).toBeInTheDocument()
   })
+
+  it('shows a preamble line above the event log', async () => {
+    vi.mocked(fetch).mockResolvedValue(fakeResponse(['data: {"type": "done"}\n\n']))
+    render(<RunCard repoUrl="https://github.com/a/b" question="q" />)
+
+    expect(await screen.findByText(/así explora y responde el agente/i)).toBeInTheDocument()
+  })
 })
