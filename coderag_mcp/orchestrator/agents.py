@@ -12,6 +12,12 @@ clones the repo itself (Task 4's asyncio.to_thread-offloaded clone.clone_repo ca
 """
 from __future__ import annotations
 
+# The @@AGENTTRACE:RAG@@/@@AGENTTRACE:TOOLS@@/@@AGENTTRACE:END@@ marker strings
+# below are a cross-layer contract with the frontend's
+# frontend/src/lib/splitAgentExplanations.ts, which parses them out of the
+# streamed answer text - changing them here without changing them there (or
+# vice versa) silently breaks marker parsing with no test failure on either
+# side, since the two layers aren't otherwise linked.
 ORCHESTRATOR_SYSTEM_PROMPT = (
     "You are a code question-answering assistant with two ways to find information "
     "in this repository:\n"

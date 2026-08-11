@@ -60,10 +60,11 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
             placeholder="https://github.com/owner/repo"
+            aria-describedby="repo-url-note"
             className="rounded border-2 border-slate-700 bg-slate-900 px-3 py-2 focus:border-amber-400 focus:outline-none"
           />
         </label>
-        <p className="text-xs text-slate-500">
+        <p id="repo-url-note" className="text-xs text-slate-500">
           Búsqueda semántica disponible solo para repos Python — otros
           lenguajes usan exploración directa de archivos.
         </p>

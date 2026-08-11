@@ -69,7 +69,7 @@ service.
 **Plans 1, 2, the dual-path-orchestrator plan (later collapsed to
 single-agent), the single-agent/MCP-tools/auth plan, the local-robustness
 plan, the orchestrator-streaming plan, and the frontend plan — all done,
-100/100 backend tests + 37/37 frontend tests passing.** See
+102/102 backend tests + 53/53 frontend tests passing.** See
 `docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
 `docs/superpowers/plans/2026-08-08-indexing-pipeline.md`, and
 `docs/superpowers/plans/2026-08-09-dual-path-orchestrator.md` for the
@@ -340,6 +340,16 @@ What exists right now:
 - `frontend/` (React+Vite+TypeScript+Tailwind): A local-only UI for the
   AgentTrace orchestrator, consuming `POST /ask/stream` to show a live
   "x-ray" of tool calls, tool results, and the streamed answer as it works.
+  The x-ray is a two-column layout (`TwoColumnLog.tsx`), routing each
+  `tool_call`/`tool_result` event into a "Búsqueda semántica" (RAG) or
+  "Herramientas de archivo" (Tools) column by tool name — match `search_code`
+  loosely (bare name or any `*__search_code` MCP-qualified name, e.g. the
+  real `mcp__search__search_code`), not by exact equality. The backend's
+  system prompt (`coderag_mcp/orchestrator/agents.py`) instructs the model to
+  append a `@@AGENTTRACE:RAG@@`/`@@AGENTTRACE:TOOLS@@`/`@@AGENTTRACE:END@@`
+  marker block explaining its method choice per column; the frontend's
+  `splitAgentExplanations()` (`frontend/src/lib/splitAgentExplanations.ts`)
+  parses and strips those markers back out of the streamed text for display.
   Dev-server-proxy-only setup (proxies `/ask` and `/ask/stream` to the
   backend on `http://localhost:8000`, no CORS configuration needed). Uses a
   custom `useAskStream` hook to deserialize the streamed event format and
@@ -405,11 +415,11 @@ in priority order:
 
 - Python 3.11+, venv at `.venv/` (`./.venv/bin/pytest`, `./.venv/bin/pip`).
 - `./.venv/bin/pytest -v` — run the backend test suite before and after any
-  change (100 tests).
+  change (102 tests).
 - Node 20.19+ or 22.12+ (per `frontend/node_modules/vite/package.json`'s
   `engines`), npm at `frontend/` (`cd frontend && npm install`, `npm test`).
   `npm test` — run the frontend test suite before and after any frontend
-  change (37 tests). Both test suites are independent and must pass.
+  change (53 tests). Both test suites are independent and must pass.
 - Follow the same workflow used to build this: brainstorm/clarify scope
   changes with the human partner first (the design doc is the source of
   truth — don't silently deviate from it), then `writing-plans` to produce

@@ -1,6 +1,6 @@
-# coderag-mcp frontend
+# AgentTrace
 
-A local-only React+Vite+TypeScript UI for coderag-mcp, showing a live
+A local-only React+Vite+TypeScript UI for AgentTrace, showing a live
 "x-ray" of the orchestrator's tool calls, tool results, and streamed
 answer as it works.
 

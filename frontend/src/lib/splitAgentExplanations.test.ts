@@ -53,4 +53,19 @@ describe('splitAgentExplanations', () => {
     expect(result.answer).toBe(text)
     expect(result.ragExplanation).toBeNull()
   })
+
+  it('is not fooled by a quoted marker string appearing in the real answer before the real marker block', () => {
+    const text =
+      'El mecanismo AgentTrace usa un marcador como @@AGENTTRACE:RAG@@ para separar ' +
+      'secciones.\n' +
+      '@@AGENTTRACE:RAG@@\n' +
+      'Expliqué RAG.\n' +
+      '@@AGENTTRACE:END@@'
+    const result = splitAgentExplanations(text)
+    expect(result.answer).toBe(
+      'El mecanismo AgentTrace usa un marcador como @@AGENTTRACE:RAG@@ para separar secciones.',
+    )
+    expect(result.ragExplanation).toBe('Expliqué RAG.')
+    expect(result.toolsExplanation).toBeNull()
+  })
 })

@@ -4,8 +4,10 @@ export type StreamEvent =
   | { type: 'no_semantic_index'; message: string }
   | { type: 'tool_call'; tool: string; input: Record<string, unknown> }
   | {
+      // ask.py's tool_names_by_id.get(block.tool_use_id) can miss and return
+      // None on the backend - reflect that here rather than lying with `string`.
       type: 'tool_result'
-      tool: string
+      tool: string | null
       tool_use_id: string
       output_preview: string
       is_error: boolean | null
