@@ -68,8 +68,9 @@ service.
 
 **Plans 1, 2, the dual-path-orchestrator plan (later collapsed to
 single-agent), the single-agent/MCP-tools/auth plan, the local-robustness
-plan, and the orchestrator-streaming plan — all done, 97/97 tests
-passing.** See `docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
+plan, the orchestrator-streaming plan, and the frontend plan — all done,
+97/97 backend tests + 26/26 frontend tests passing.** See
+`docs/superpowers/plans/2026-08-08-coderag-mcp-scaffold-and-spike.md`,
 `docs/superpowers/plans/2026-08-08-indexing-pipeline.md`, and
 `docs/superpowers/plans/2026-08-09-dual-path-orchestrator.md` for the
 earlier plans' history. This branch (`worktree-single-agent-mcp-tools-auth`)
@@ -330,8 +331,16 @@ What exists right now:
   the full event schema and its documented caveats (no `reasoning` events
   in practice yet since extended thinking isn't enabled;
   `answer_token` can include intermediate model commentary, not only the
-  final answer). This is backend-only — no frontend consumes this stream
-  yet; that's an explicitly separate, later sub-project.
+  final answer).
+- `frontend/` (React+Vite+TypeScript+Tailwind): A local-only UI for the
+  coderag-mcp orchestrator, consuming `POST /ask/stream` to show a live
+  "x-ray" of tool calls, tool results, and the streamed answer as it works.
+  Dev-server-proxy-only setup (proxies `/ask` and `/ask/stream` to the
+  backend on `http://localhost:8000`, no CORS configuration needed). Uses a
+  custom `useAskStream` hook to deserialize the streamed event format and
+  manage answer state. Includes optional API-key storage in browser local
+  storage. No production build/deploy story yet — scope is deliberately
+  local/dev-only, matching the backend's portfolio-project status.
 
 **Important gotcha already paid for — don't rediscover it:** the `mcp`
 Python SDK installed here is **2.0.0**, which has a completely different
@@ -375,23 +384,26 @@ current — they may describe the older `FastMCP`-based API.
 ## What comes next
 
 Superseded from the original design doc's Build Order by the
-orchestrator/single-agent/auth work (all done — see "Current status"
-above). Remaining, roughly in priority order:
+orchestrator/single-agent/auth work, local-robustness, orchestrator-streaming,
+and the frontend (all done — see "Current status" above). Remaining, roughly
+in priority order:
 
-1. Minimal React+Vite+TypeScript frontend (separate plan, deliberately
-   deferred — this repo is backend-first).
-2. Deploy (Render + Supabase + Vercel per the spec — note `store/db.py`'s
+1. Deploy (Render + Supabase + Vercel per the spec — note `store/db.py`'s
    sqlite-vec extension loading is unverified on Linux, see above) +
    polish the README (architecture diagram, demo GIF, live URL,
    design-decisions section) + ADRs.
-3. Any of the "Known deferred items" above worth addressing before a
+2. Any of the "Known deferred items" above worth addressing before a
    public demo — none are blocking, but the repo-size streaming enforcement
    is the most likely to matter under real load.
 
 ## How to work in this repo
 
 - Python 3.11+, venv at `.venv/` (`./.venv/bin/pytest`, `./.venv/bin/pip`).
-- `./.venv/bin/pytest -v` — run the test suite before and after any change.
+- `./.venv/bin/pytest -v` — run the backend test suite before and after any
+  change (97 tests).
+- Node 18+, npm at `frontend/` (`./.venv/bin/npm install`, `npm test`).
+  `npm test` — run the frontend test suite before and after any frontend
+  change (26 tests). Both test suites are independent and must pass.
 - Follow the same workflow used to build this: brainstorm/clarify scope
   changes with the human partner first (the design doc is the source of
   truth — don't silently deviate from it), then `writing-plans` to produce

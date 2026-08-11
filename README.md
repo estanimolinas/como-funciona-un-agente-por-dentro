@@ -59,7 +59,6 @@ curl -X POST http://localhost:8000/ask \
 but as Server-Sent Events (`data: <json>\n\n`) streaming the orchestrator's
 live progress as it happens — indexing status, each tool call and result,
 and the answer token-by-token — instead of waiting for one final response.
-Backend-only for now; no bundled frontend consumes it yet.
 
 All other settings (`CODERAG_PUBLIC_HOST`, `CODERAG_SQLITE_DB_PATH`,
 `CODERAG_ALLOWED_HOSTS`, etc.) are optional and have sensible defaults — see
@@ -67,6 +66,13 @@ All other settings (`CODERAG_PUBLIC_HOST`, `CODERAG_SQLITE_DB_PATH`,
 `VOYAGE_API_KEY` is only read from its `CODERAG_`-prefixed env var name, so a
 generic env var like `ALLOWED_HOSTS` (common on PaaS platforms) can't
 accidentally override it.
+
+## Frontend (optional)
+
+A local-only React frontend showing a live view of the orchestrator's
+tool calls and streamed answer as it works — see
+[`frontend/README.md`](frontend/README.md) for setup. Not required to use
+the REST or MCP API directly.
 
 ## Auth
 

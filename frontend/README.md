@@ -1,32 +1,32 @@
-# React + TypeScript + Vite
+# coderag-mcp frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A local-only React+Vite+TypeScript UI for coderag-mcp, showing a live
+"x-ray" of the orchestrator's tool calls, tool results, and streamed
+answer as it works.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The backend must already be running on `http://localhost:8000` (see the
+root `README.md`'s Quickstart — `uvicorn coderag_mcp.api.main:app`).
 
-## React Compiler
+## Setup
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Open the printed local URL (typically `http://localhost:5173`). The dev
+server proxies `/ask` and `/ask/stream` requests to the backend, so no
+CORS configuration is needed.
+
+If the backend has `CODERAG_API_KEY` set, click "Add API key (optional)"
+on the form and paste it in — it's saved to your browser's local storage
+so you don't need to re-enter it each time.
+
+## Testing
+
+```bash
+npm test
+```
