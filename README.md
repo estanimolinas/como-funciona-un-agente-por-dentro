@@ -55,6 +55,12 @@ curl -X POST http://localhost:8000/ask \
   -d '{"repo_url": "https://github.com/pypa/sampleproject", "question": "What does this project do, and where is the package version defined?"}'
 ```
 
+`POST /ask/stream` takes the same request body and returns the same answer,
+but as Server-Sent Events (`data: <json>\n\n`) streaming the orchestrator's
+live progress as it happens — indexing status, each tool call and result,
+and the answer token-by-token — instead of waiting for one final response.
+Backend-only for now; no bundled frontend consumes it yet.
+
 All other settings (`CODERAG_PUBLIC_HOST`, `CODERAG_SQLITE_DB_PATH`,
 `CODERAG_ALLOWED_HOSTS`, etc.) are optional and have sensible defaults — see
 `coderag_mcp/config.py`. Note the `CODERAG_` prefix: every setting except

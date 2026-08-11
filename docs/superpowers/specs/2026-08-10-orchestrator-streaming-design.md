@@ -87,7 +87,7 @@ Each SSE message is `data: <json>\n\n`, one JSON object with a discriminant
 {"type": "indexing_start", "repo_url": "..."}
 {"type": "indexing_done", "chunk_count": 42, "duration_s": 3.2}
 {"type": "tool_call", "tool": "search_code" | "Read" | "Grep" | "Glob", "input": {...}}
-{"type": "tool_result", "tool": "...", "output_preview": "..."}
+{"type": "tool_result", "tool": "...", "tool_use_id": "...", "output_preview": "...", "is_error": true | false | null}
 {"type": "reasoning", "text": "..."}
 {"type": "answer_token", "text": "..."}
 {"type": "done"}
@@ -96,6 +96,27 @@ Each SSE message is `data: <json>\n\n`, one JSON object with a discriminant
 
 - `output_preview` is truncated (300-500 chars, with a marker if truncated)
   so a large `search_code`/`Read` result doesn't flood the stream.
+- `tool_result`'s `tool` field is the name of the tool that produced this
+  result (looked up server-side from the `tool_call` that shares its
+  `tool_use_id`), so a consumer can correlate a result back to the tool
+  that produced it without having to track `tool_use_id`s itself.
+  `tool_use_id` is still included alongside it for a consumer that wants
+  exact call/result pairing (e.g. multiple concurrent calls to the same
+  tool). `is_error` is `ToolResultBlock.is_error` passed through verbatim
+  (`true`, `false`, or `null` if the SDK didn't set it) so a failed tool
+  call is distinguishable from a successful one.
+- `reasoning` events depend on extended thinking being enabled in
+  `ClaudeAgentOptions`, which it currently is not — don't expect to see
+  `reasoning` events in practice yet. Enabling extended thinking is a
+  follow-up, not part of this feature.
+- `answer_token` events may include the model's intermediate commentary
+  emitted between tool calls (e.g. "Let me search for the auth
+  handler..."), not only the true final answer — the stream has no
+  separate event type distinguishing "commentary" from "the final
+  answer," so a frontend consuming `answer_token` events should not assume
+  every one of them belongs to the final answer in isolation. A clean
+  separation (if it turns out to matter for the frontend) is a follow-up,
+  not solved here.
 - `error`'s `message` follows the exact same safe-message policy `/ask`
   already applies (`IndexingError` → its own message, since those are
   client-safe by design; anything else → a generic safe message, never raw
@@ -104,7 +125,11 @@ Each SSE message is `data: <json>\n\n`, one JSON object with a discriminant
 - If `ask_stream()` (or the indexing step before it) raises mid-stream, the
   endpoint emits one `error` event and closes the stream cleanly — it
   cannot fall back to a normal HTTP error status, since SSE's headers are
-  already committed once streaming starts.
+  already committed once streaming starts. If an `error` event arrives
+  without a preceding `done`, any `answer_token`s already received are a
+  truncated/incomplete answer, not a complete one — a frontend should
+  treat the absence of `done` as "this response did not finish
+  successfully," even if some answer text was already streamed.
 
 ## Testing
 

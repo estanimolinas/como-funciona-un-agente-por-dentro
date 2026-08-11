@@ -71,7 +71,7 @@ stdlib `json`.
   (signature unchanged from today) in `coderag_mcp/orchestrator/ask.py`. Task 2
   imports and consumes `ask_stream`.
 
-- [ ] **Step 1: Write the failing tests for `ask_stream()`'s event mapping**
+- [x] **Step 1: Write the failing tests for `ask_stream()`'s event mapping**
 
 Add to `tests/orchestrator/test_ask.py` (keep the existing
 `test_ask_concatenates_streamed_text_and_scopes_cwd` test as-is for now — it moves to
@@ -200,12 +200,12 @@ Check the top of `tests/orchestrator/test_ask.py` already imports `asyncio`, `py
 imports above alongside the existing `AssistantMessage, SystemMessage, TextBlock`
 import line.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `./.venv/bin/pytest tests/orchestrator/test_ask.py -v`
 Expected: FAIL (`ImportError: cannot import name 'ask_stream'`)
 
-- [ ] **Step 3: Write `ask_stream()` and refactor `ask()` into a wrapper**
+- [x] **Step 3: Write `ask_stream()` and refactor `ask()` into a wrapper**
 
 Replace `coderag_mcp/orchestrator/ask.py` entirely:
 
@@ -376,7 +376,7 @@ async def ask(
     return "".join(answer_parts)
 ```
 
-- [ ] **Step 4: Run the new tests to verify they pass**
+- [x] **Step 4: Run the new tests to verify they pass**
 
 Run: `./.venv/bin/pytest tests/orchestrator/test_ask.py -v`
 Expected: the 3 new `ask_stream` tests PASS. The existing
@@ -386,12 +386,12 @@ this, since it's the proof this refactor didn't break `/ask`/`ask_repo`. If it f
 do not change the test — the refactor has a real behavior regression, fix
 `ask_stream()`/`ask()` instead.
 
-- [ ] **Step 5: Run the full suite**
+- [x] **Step 5: Run the full suite**
 
 Run: `./.venv/bin/pytest -v`
 Expected: PASS (88 + 3 new = 91)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add coderag_mcp/orchestrator/ask.py tests/orchestrator/test_ask.py
@@ -419,7 +419,7 @@ git commit -m "feat: add ask_stream() as the streaming orchestrator core, ask() 
   `chunk_count` field — no later task consumes it). The `POST /ask/stream` route
   itself is the endpoint, not a Python interface anything else imports.
 
-- [ ] **Step 1: Add `count_chunks` to `store/chunks.py`**
+- [x] **Step 1: Add `count_chunks` to `store/chunks.py`**
 
 Edit `coderag_mcp/store/chunks.py`, adding this function after `search_chunks`:
 
@@ -430,7 +430,7 @@ def count_chunks(conn: sqlite3.Connection, repo_id: int) -> int:
     return row[0]
 ```
 
-- [ ] **Step 2: Write the failing test for `count_chunks`**
+- [x] **Step 2: Write the failing test for `count_chunks`**
 
 Add to `tests/store/test_chunks.py`:
 
@@ -451,13 +451,13 @@ Add `count_chunks` to the existing `from coderag_mcp.store.chunks import insert_
 search_chunks` import line at the top of the file (check its exact current form
 first).
 
-- [ ] **Step 3: Run the test to verify it fails, then passes**
+- [x] **Step 3: Run the test to verify it fails, then passes**
 
 Run: `./.venv/bin/pytest tests/store/test_chunks.py -v`
 Expected: FAIL first (`ImportError`), then PASS after Step 1's addition (re-run to
 confirm).
 
-- [ ] **Step 4: Write `coderag_mcp/api/ask_stream_route.py`**
+- [x] **Step 4: Write `coderag_mcp/api/ask_stream_route.py`**
 
 ```python
 """POST /ask/stream: the same job as POST /ask, but streams the orchestrator's
@@ -541,7 +541,7 @@ async def ask_stream_endpoint(
     return StreamingResponse(_stream_events(conn, request), media_type="text/event-stream")
 ```
 
-- [ ] **Step 5: Wire the router into `api/main.py`**
+- [x] **Step 5: Wire the router into `api/main.py`**
 
 Edit `coderag_mcp/api/main.py`. Add the import:
 
@@ -557,7 +557,7 @@ right after it:
     app.include_router(ask_stream_router)
 ```
 
-- [ ] **Step 6: Write the end-to-end test**
+- [x] **Step 6: Write the end-to-end test**
 
 Create `tests/api/test_ask_stream_route.py`:
 
@@ -687,17 +687,17 @@ def test_ask_stream_emits_error_event_on_mid_stream_failure(client):
     assert events[-1] == {"type": "error", "message": "Could not answer the question."}
 ```
 
-- [ ] **Step 7: Run the new tests**
+- [x] **Step 7: Run the new tests**
 
 Run: `./.venv/bin/pytest tests/api/test_ask_stream_route.py -v`
 Expected: PASS
 
-- [ ] **Step 8: Run the full suite**
+- [x] **Step 8: Run the full suite**
 
 Run: `./.venv/bin/pytest -v`
 Expected: PASS (91 + 1 [count_chunks] + 4 [ask_stream_route] = 96)
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add coderag_mcp/api/ask_stream_route.py coderag_mcp/api/main.py coderag_mcp/store/chunks.py \

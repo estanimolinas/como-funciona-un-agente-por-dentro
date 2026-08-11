@@ -299,17 +299,37 @@ What exists right now:
   - `agents.py` — `ORCHESTRATOR_SYSTEM_PROMPT`, the single-agent's system
     prompt (see its docstring for why the earlier two-`AgentDefinition`
     dispatch design was collapsed into this one agent).
-  - `ask.py` — `ask(conn, repo_id, repo_url, question) -> str`. Clones the
+  - `ask.py` — `ask_stream(conn, repo_id, repo_url, question) ->
+    AsyncIterator[dict]` is now the real orchestrator core: it clones the
     repo **on every call**, not just when file-reading tools are actually
-    used — `ClaudeAgentOptions.cwd` must be set before the orchestrator
+    used (`ClaudeAgentOptions.cwd` must be set before the orchestrator
     runs, so there's no way to clone lazily without hooking the SDK's
-    internal tool-dispatch (out of scope for v1). This is a deliberate,
-    documented latency tradeoff, not a bug.
+    internal tool-dispatch — a deliberate, documented latency tradeoff, not
+    a bug), then iterates `query()` and yields one structured event per
+    tool call, tool result, reasoning block, and answer token
+    (`tool_call`, `tool_result`, `reasoning`, `answer_token`, `done`).
+    `ask(conn, repo_id, repo_url, question) -> str` is now a thin wrapper
+    over `ask_stream()`: it keeps only `answer_token` events and
+    concatenates them — same external signature/behavior as before this
+    refactor, used by `POST /ask` and the `ask_repo` MCP tool, both of
+    which only want the final text.
 - `coderag_mcp/api/ask_route.py` — `POST /ask` (`AskRequest{repo_url,
   question}` → `AskResponse{answer}`), behind `require_api_key`. Indexes on
   first request via `index_and_store_repo_async`, then calls
   `orchestrator.ask.ask()`. Maps `IndexingError` (from either the initial
   index or `ask()`'s re-clone) to 400, everything else to 502.
+- `coderag_mcp/api/ask_stream_route.py` — `POST /ask/stream`, same request
+  body and auth as `POST /ask`, but returns a `StreamingResponse` of
+  Server-Sent Events (`data: <json>\n\n`) exposing the orchestrator's live
+  decision-making as it happens: indexing progress
+  (`indexing_start`/`indexing_done`, skipped on a cache hit), then every
+  event `ask_stream()` yields, forwarded as-is. See
+  `docs/superpowers/specs/2026-08-10-orchestrator-streaming-design.md` for
+  the full event schema and its documented caveats (no `reasoning` events
+  in practice yet since extended thinking isn't enabled;
+  `answer_token` can include intermediate model commentary, not only the
+  final answer). This is backend-only — no frontend consumes this stream
+  yet; that's an explicitly separate, later sub-project.
 
 **Important gotcha already paid for — don't rediscover it:** the `mcp`
 Python SDK installed here is **2.0.0**, which has a completely different
