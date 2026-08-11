@@ -112,7 +112,7 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
           if (cancelled) return
           if (result === 'timeout') {
             await reader.cancel()
-            throw new Error('Connection lost')
+            throw new Error('Conexión perdida')
           }
           const { done: streamDone, value } = result
           if (streamDone) break
@@ -142,7 +142,7 @@ export function useAskStream(params: AskStreamParams | null): AskStreamResult {
 
         if (!sawTerminal && !cancelled) {
           setStatus('error')
-          setEvents((prev) => [...prev, { type: 'error', message: 'Connection lost' }])
+          setEvents((prev) => [...prev, { type: 'error', message: 'Conexión perdida' }])
         }
       } catch (err) {
         if (cancelled) return

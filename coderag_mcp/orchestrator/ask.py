@@ -77,9 +77,9 @@ async def ask_stream(
         yield {
             "type": "no_semantic_index",
             "message": (
-                "This repository has no indexed code (unsupported language, or an "
-                "empty/non-code repo) — answering by exploring files directly instead "
-                "of semantic search."
+                "Este repositorio no tiene código indexado (idioma no soportado, o un "
+                "repositorio vacío/sin código) — respondiendo mediante exploración "
+                "directa de archivos en lugar de búsqueda semántica."
             ),
         }
 

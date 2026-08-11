@@ -211,9 +211,9 @@ async def test_ask_stream_yields_no_semantic_index_event_when_zero_chunks(tmp_pa
     assert events[0] == {
         "type": "no_semantic_index",
         "message": (
-            "This repository has no indexed code (unsupported language, or an "
-            "empty/non-code repo) — answering by exploring files directly instead "
-            "of semantic search."
+            "Este repositorio no tiene código indexado (idioma no soportado, o un "
+            "repositorio vacío/sin código) — respondiendo mediante exploración "
+            "directa de archivos en lugar de búsqueda semántica."
         ),
     }
     assert "no indexed code" in _reasoning_capturing_query_stream.captured_system_prompt

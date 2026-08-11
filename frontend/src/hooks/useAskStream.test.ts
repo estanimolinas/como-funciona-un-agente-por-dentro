@@ -220,7 +220,7 @@ describe('useAskStream', () => {
 
     await waitFor(() => expect(result.current.status).toBe('error'))
     expect(result.current.events).toEqual([
-      { type: 'error', message: 'Connection lost' },
+      { type: 'error', message: 'Conexión perdida' },
     ])
 
     setTimeoutSpy.mockRestore()
