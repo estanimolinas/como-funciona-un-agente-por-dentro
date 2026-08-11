@@ -34,6 +34,7 @@ async def test_ask_concatenates_streamed_text_and_scopes_cwd(tmp_path):
         patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
         patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path) as mock_clone,
         patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone") as mock_cleanup,
+        patch("coderag_mcp.orchestrator.ask.count_chunks", return_value=5),
         patch("coderag_mcp.orchestrator.ask.query", side_effect=_fake_query_stream),
     ):
         answer = await ask(conn, repo_id=1, repo_url="https://github.com/a/b", question="how does auth work?")
@@ -57,6 +58,7 @@ async def test_ask_raises_timeout_error_if_query_never_completes(tmp_path):
         patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
         patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
         patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.count_chunks", return_value=5),
         patch("coderag_mcp.orchestrator.ask.query", side_effect=_hanging_query_stream),
     ):
         with pytest.raises(TimeoutError):
@@ -107,6 +109,7 @@ async def test_ask_stream_yields_one_event_per_block(tmp_path):
         patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
         patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
         patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.count_chunks", return_value=5),
         patch("coderag_mcp.orchestrator.ask.query", side_effect=_scripted_query_stream),
     ):
         events = [
@@ -146,6 +149,7 @@ async def test_ask_stream_truncates_long_tool_results(tmp_path):
         patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
         patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
         patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.count_chunks", return_value=5),
         patch("coderag_mcp.orchestrator.ask.query", side_effect=_one_tool_result),
     ):
         events = [
@@ -170,6 +174,7 @@ async def test_ask_stream_raises_timeout_error_if_query_never_completes(tmp_path
         patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
         patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
         patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.count_chunks", return_value=5),
         patch("coderag_mcp.orchestrator.ask.query", side_effect=_hanging_query_stream),
     ):
         with pytest.raises(TimeoutError):
@@ -177,3 +182,59 @@ async def test_ask_stream_raises_timeout_error_if_query_never_completes(tmp_path
                 conn, repo_id=1, repo_url="https://github.com/a/b", question="?", timeout_s=0.05
             ):
                 pass
+
+
+async def _reasoning_capturing_query_stream(*, prompt, options):
+    # Captures the system prompt actually passed to query() so the test can
+    # assert on the appended no-index note, then yields a trivial answer.
+    _reasoning_capturing_query_stream.captured_system_prompt = options.system_prompt
+    yield AssistantMessage(content=[TextBlock(text="No index available here.")], model="test")
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_yields_no_semantic_index_event_when_zero_chunks(tmp_path):
+    conn = MagicMock()
+
+    with (
+        patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
+        patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
+        patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.count_chunks", return_value=0) as mock_count,
+        patch("coderag_mcp.orchestrator.ask.query", side_effect=_reasoning_capturing_query_stream),
+    ):
+        events = [
+            event
+            async for event in ask_stream(conn, repo_id=1, repo_url="https://github.com/a/b", question="q")
+        ]
+
+    mock_count.assert_called_once_with(conn, 1)
+    assert events[0] == {
+        "type": "no_semantic_index",
+        "message": (
+            "This repository has no indexed code (unsupported language, or an "
+            "empty/non-code repo) — answering by exploring files directly instead "
+            "of semantic search."
+        ),
+    }
+    assert "no indexed code" in _reasoning_capturing_query_stream.captured_system_prompt
+    assert "search_code" in _reasoning_capturing_query_stream.captured_system_prompt
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_omits_no_semantic_index_event_when_chunks_exist(tmp_path):
+    conn = MagicMock()
+
+    with (
+        patch("coderag_mcp.orchestrator.ask.build_search_server", return_value=object()),
+        patch("coderag_mcp.orchestrator.ask.clone.clone_repo", return_value=tmp_path),
+        patch("coderag_mcp.orchestrator.ask.clone.cleanup_clone"),
+        patch("coderag_mcp.orchestrator.ask.count_chunks", return_value=42),
+        patch("coderag_mcp.orchestrator.ask.query", side_effect=_reasoning_capturing_query_stream),
+    ):
+        events = [
+            event
+            async for event in ask_stream(conn, repo_id=1, repo_url="https://github.com/a/b", question="q")
+        ]
+
+    assert all(event["type"] != "no_semantic_index" for event in events)
+    assert "no indexed code" not in _reasoning_capturing_query_stream.captured_system_prompt

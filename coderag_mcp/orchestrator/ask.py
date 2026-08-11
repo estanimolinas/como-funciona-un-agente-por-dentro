@@ -23,6 +23,8 @@ from claude_agent_sdk import (
 from coderag_mcp.indexing import clone
 from coderag_mcp.orchestrator.agents import ORCHESTRATOR_SYSTEM_PROMPT
 from coderag_mcp.orchestrator.tools import build_search_server
+from coderag_mcp.store.chunks import count_chunks
+from coderag_mcp.store.db import run_db_sync
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,18 @@ async def ask_stream(
     """
     search_server = build_search_server(conn, repo_id)
 
+    chunk_count = await run_db_sync(count_chunks, conn, repo_id)
+    has_semantic_index = chunk_count > 0
+    if not has_semantic_index:
+        yield {
+            "type": "no_semantic_index",
+            "message": (
+                "This repository has no indexed code (unsupported language, or an "
+                "empty/non-code repo) — answering by exploring files directly instead "
+                "of semantic search."
+            ),
+        }
+
     repo_dir = await asyncio.to_thread(clone.clone_repo, repo_url, allow_local_paths=False)
     start = time.monotonic()
     logger.info(
@@ -78,7 +92,14 @@ async def ask_stream(
     try:
         options = ClaudeAgentOptions(
             cwd=str(repo_dir),
-            system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
+            system_prompt=(
+                ORCHESTRATOR_SYSTEM_PROMPT
+                if has_semantic_index
+                else ORCHESTRATOR_SYSTEM_PROMPT
+                + "\n\nNote: this repository has no indexed code (unsupported "
+                "language, or an empty/non-code repo) — search_code will return no "
+                "useful results here. Rely on Read, Grep, and Glob instead."
+            ),
             allowed_tools=["mcp__search__search_code", "Read", "Grep", "Glob"],
             mcp_servers={"search": search_server},
             include_partial_messages=True,
