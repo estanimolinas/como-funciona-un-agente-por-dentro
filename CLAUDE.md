@@ -409,7 +409,7 @@ in priority order:
 - Node 20.19+ or 22.12+ (per `frontend/node_modules/vite/package.json`'s
   `engines`), npm at `frontend/` (`cd frontend && npm install`, `npm test`).
   `npm test` — run the frontend test suite before and after any frontend
-  change (27 tests). Both test suites are independent and must pass.
+  change (29 tests). Both test suites are independent and must pass.
 - Follow the same workflow used to build this: brainstorm/clarify scope
   changes with the human partner first (the design doc is the source of
   truth — don't silently deviate from it), then `writing-plans` to produce
