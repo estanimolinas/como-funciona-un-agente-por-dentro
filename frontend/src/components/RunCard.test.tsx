@@ -59,6 +59,6 @@ describe('RunCard', () => {
     render(<RunCard repoUrl="https://github.com/a/b" question="q" />)
 
     await screen.findByText(/boom/)
-    expect(screen.getByText(/incomplete/i)).toBeInTheDocument()
+    expect(screen.getByText(/incompleto/i)).toBeInTheDocument()
   })
 })
