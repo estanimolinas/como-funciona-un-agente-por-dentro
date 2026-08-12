@@ -1,6 +1,6 @@
-# AgentTrace
+# ¿Cómo piensa un agente?
 
-Backend de RAG consciente del código: indexa repositorios públicos con
+**AgentTrace** — backend de RAG consciente del código: indexa repositorios públicos con
 chunking basado en AST (tree-sitter), genera embeddings de cada chunk con
 `voyage-code-3` de Voyage AI, y los guarda en SQLite con la extensión
 `sqlite-vec` (similitud coseno). Responde preguntas sobre el código, con

@@ -1,15 +1,15 @@
 # AgentTrace
 
-A local-only React+Vite+TypeScript UI for AgentTrace, showing a live
-"x-ray" of the orchestrator's tool calls, tool results, and streamed
-answer as it works.
+Una UI local en React+Vite+TypeScript para AgentTrace, que muestra en vivo
+una "radiografía" de las llamadas a herramientas, sus resultados, y la
+respuesta del orquestador mientras trabaja.
 
-## Prerequisites
+## Requisitos
 
-Node 20.19+ or 22.12+ (required by `vite`'s `engines` field).
+Node 20.19+ o 22.12+ (requerido por el campo `engines` de `vite`).
 
-The backend must already be running on `http://localhost:8000` (see the
-root `README.md`'s Quickstart — `uvicorn coderag_mcp.api.main:app`).
+El backend tiene que estar corriendo en `http://localhost:8000` (ver el
+Quickstart del `README.md` raíz — `uvicorn coderag_mcp.api.main:app`).
 
 ## Setup
 
@@ -19,15 +19,15 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL (typically `http://localhost:5173`). The dev
-server proxies `/ask` and `/ask/stream` requests to the backend, so no
-CORS configuration is needed.
+Abrí la URL local que imprime (típicamente `http://localhost:5173`). El
+servidor de desarrollo hace proxy de `/ask` y `/ask/stream` hacia el
+backend, así que no hace falta configurar CORS.
 
-If the backend has `CODERAG_API_KEY` set, click "Add API key (optional)"
-on the form and paste it in — it's saved to your browser's local storage
-so you don't need to re-enter it each time.
+Si el backend tiene `CODERAG_API_KEY` seteada, hacé click en "Agregar API
+key (opcional)" en el formulario y pegala ahí — se guarda en el
+localStorage del navegador para no tener que reingresarla cada vez.
 
-## Testing
+## Tests
 
 ```bash
 npm test
