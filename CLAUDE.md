@@ -2,6 +2,12 @@
 
 Read this before doing anything else in this repo.
 
+**Note:** `docs/superpowers/` (the full specs and per-plan task lists this
+file references below) was removed from the public repo for cleanliness
+after launch — the decisions they document are summarized in this file and
+in the README's "Design decisions worth knowing" section. The paths below
+are kept as historical references, not links to files that still exist here.
+
 ## What this is
 
 A portfolio backend project: code-aware RAG over public git repositories,

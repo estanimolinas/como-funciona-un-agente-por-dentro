@@ -43,28 +43,26 @@ sucede.
    así quien llama puede ver qué método eligió el agente y por qué, no solo
    la respuesta final.
 
-### Decisiones de diseño que vale la pena conocer
+### Decisiones de diseño
 
-- **SQLite + `sqlite-vec` en vez de Postgres/pgvector** — el diseño
-  original especificaba Postgres; se reemplazó temprano porque un vector
-  store embebido en un solo archivo no necesita un servicio de base de
-  datos aparte para correr ni para deployar, a costa de margen de
-  escalabilidad en escrituras concurrentes que este proyecto no necesita.
-- **Un solo agente, no una arquitectura de dispatcher más subagentes** —
-  un diseño anterior tenía un orquestador de nivel superior despachando a
-  subagentes separados (`rag-search`/`code-explorer`) vía la herramienta
-  Agent. Se colapsó en un solo agente con ambas familias de herramientas
-  directamente: despachar agregaba una ida y vuelta de tokens/latencia
-  para una decisión que el modelo puede tomar por sí mismo.
-- **La elección de herramienta es una decisión en vivo, no un pipeline
-  guionado** — deliberadamente esto no es "siempre embed-search-y-después-
-  generar". El agente decide por pregunta, que es también por qué existe
-  el trace en vivo de la demo: el punto es hacer visible esa decisión, no
-  solo la respuesta final.
-- **Chunking solo para Python** — tree-sitter-python es el único chunker
-  implementado; otros lenguajes caen a exploración directa de archivos
-  (`Read`/`Grep`/`Glob`) sin índice semántico, algo que tanto la UI como el
-  agente conocen explícitamente en vez de devolver resultados vacíos en
+- **SQLite + `sqlite-vec`, no Postgres/pgvector.** Un vector store embebido
+  en un solo archivo no necesita un servicio de base de datos aparte para
+  correr ni para deployar. El costo es margen de escalabilidad en
+  escrituras concurrentes, que este proyecto no necesita.
+- **Un solo agente con dos familias de herramientas, no un dispatcher a
+  subagentes.** El agente recibe `search_code` (semántico) y
+  `Read`/`Grep`/`Glob` (exploración directa) al mismo tiempo y elige por
+  pregunta. Despachar a subagentes especializados agregaría una ida y
+  vuelta de tokens/latencia para una decisión que el modelo ya puede tomar
+  directamente.
+- **La elección de herramienta es una decisión en vivo del agente, no un
+  pipeline fijo.** No es "siempre buscar y después generar" — el agente
+  decide caso por caso, y el trace en vivo de la demo existe justamente
+  para hacer visible esa decisión, no solo la respuesta final.
+- **Chunking solo para Python.** tree-sitter-python es el único chunker
+  implementado; otros lenguajes usan exploración directa de archivos
+  (`Read`/`Grep`/`Glob`) sin índice semántico, y tanto la UI como el agente
+  lo saben explícitamente en vez de devolver resultados vacíos en
   silencio.
 
 ## Inspiración
