@@ -126,9 +126,32 @@ async def ask_stream(
                 "language, or an empty/non-code repo) — search_code will return no "
                 "useful results here. Rely on Read, Grep, and Glob instead."
             ),
+            # `tools` is the actual restriction on which BUILT-IN tools exist at
+            # all for this session - confirmed live: without it, Bash (not in
+            # allowed_tools below) was still callable and executed real shell
+            # commands against the cloned repo. `allowed_tools` only controls
+            # whether an already-available tool needs a permission prompt, it does
+            # NOT restrict which tools are available - a real gotcha in this SDK's
+            # naming (their own docstrings say as much: "To restrict which tools
+            # are available at all, use `tools`" on ClaudeAgentOptions.allowed_tools).
+            # search_code is unaffected by this list since it's an MCP-server tool
+            # (via mcp_servers below), not a built-in one.
+            tools=["Read", "Grep", "Glob"],
             allowed_tools=["mcp__search__search_code", "Read", "Grep", "Glob"],
             mcp_servers={"search": search_server},
             include_partial_messages=True,
+            # Without this, the bundled `claude` CLI subprocess loads filesystem
+            # settings (project .claude/settings.json, .claude/settings.local.json,
+            # and user ~/.claude/settings.json) by default, which can define extra
+            # tools/subagents (e.g. "Agent") and permissions.allow rules that bypass
+            # allowed_tools above entirely - confirmed live: a real run against a
+            # cloned repo invoked the "Agent" tool with subagent_type "Explore",
+            # neither of which is in allowed_tools, sourced from this very repo's
+            # own accumulated .claude/settings.local.json. setting_sources=[] is the
+            # SDK's documented "isolation mode" - loads no filesystem settings at
+            # all, so allowed_tools is the sole source of truth for what this
+            # single-agent orchestrator (deliberately no subagents) can call.
+            setting_sources=[],
         )
 
         # Tracks each currently-open content block's type by index, populated from

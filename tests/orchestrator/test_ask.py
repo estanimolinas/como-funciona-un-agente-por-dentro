@@ -18,7 +18,14 @@ from coderag_mcp.orchestrator.ask import ask, ask_stream
 
 async def _fake_query_stream(*, prompt, options):
     assert prompt == "how does auth work?"
+    # `tools` is the real restriction on which built-in tools exist at all for
+    # this session (Bash/Write/Edit/etc. must NOT be reachable) - `allowed_tools`
+    # alone only controls whether an already-available tool needs a permission
+    # prompt, confirmed live to NOT block Bash by itself. See ask.py's comment
+    # on this ClaudeAgentOptions construction for the full story.
+    assert options.tools == ["Read", "Grep", "Glob"]
     assert options.allowed_tools == ["mcp__search__search_code", "Read", "Grep", "Glob"]
+    assert options.setting_sources == []
     assert options.agents is None
     # A non-AssistantMessage should be ignored, not concatenated into the answer.
     yield SystemMessage(subtype="subagent_start", data={})
