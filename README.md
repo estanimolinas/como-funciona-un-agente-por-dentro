@@ -13,6 +13,52 @@ plugged into any MCP client (Claude Desktop, Claude.ai connectors, etc.).
 `ask_repo`) are both live end-to-end, behind optional API-key auth — see the
 full design doc for architecture, decisions, and roadmap.
 
+## Demo
+
+[![AgentTrace demo](https://img.youtube.com/vi/g_o0UT6XCRw/maxresdefault.jpg)](https://youtu.be/g_o0UT6XCRw)
+
+Live walkthrough of the local frontend: indexing a repo, the agent choosing
+between semantic search and direct file exploration per question, and the
+live two-column trace of that decision as it happens.
+
+## How it works
+
+1. **Index** — clone a public repo, parse `.py` files with tree-sitter,
+   extract one chunk per top-level function/class/method (not naive
+   line-splitting), embed each chunk with Voyage AI's `voyage-code-3`, and
+   store the vectors in SQLite via the `sqlite-vec` extension. Idempotent by
+   URL — a repo already indexed is a no-op.
+2. **Ask** — a single Claude Agent SDK agent gets both a semantic search
+   tool (`search_code`, over the indexed chunks) and direct file tools
+   (`Read`/`Grep`/`Glob`, over the real cloned files) and picks per
+   question which to use — conceptual/"how does X work" questions lean
+   toward semantic search, exact-symbol/"what does file:line do" questions
+   lean toward direct exploration.
+3. **Trace** — every tool call, tool result, and answer token streams out
+   as a structured event (`POST /ask/stream`), so a caller can watch which
+   method the agent picked and why, not just get a final answer.
+
+### Design decisions worth knowing
+
+- **SQLite + `sqlite-vec` instead of Postgres/pgvector** — the original
+  design doc specified Postgres; this was superseded early on since a
+  single-file embedded vector store needs no separate DB service to run or
+  deploy, at the cost of concurrent-write scaling headroom this project
+  doesn't need.
+- **One agent, not a dispatcher-plus-subagents architecture** — an earlier
+  design had a top-level orchestrator dispatching to separate
+  `rag-search`/`code-explorer` subagents via the Agent tool. Collapsed into
+  a single agent given both tool families directly: dispatching added a
+  token/latency round-trip for a decision the model can make itself.
+- **Tool choice is a live decision, not a scripted pipeline** — this is
+  deliberately not "always embed-search-then-generate." The agent decides
+  per question, which is also why the demo's live trace exists: the point
+  is to make that decision visible, not just the final answer.
+- **Python-only chunking** — tree-sitter-python is the only chunker
+  implemented; other languages fall back to direct file exploration
+  (`Read`/`Grep`/`Glob`) with no semantic index, which the UI/agent are
+  both told about explicitly rather than silently returning empty results.
+
 ## Inspiration
 
 Design patterns in this project are inspired by
@@ -32,8 +78,8 @@ Agent SDK, which drives this CLI as a subprocess. Without one of the two, a
 first `curl /ask` will fail.
 
 ```bash
-git clone https://github.com/<you>/coderag-mcp.git
-cd coderag-mcp
+git clone https://github.com/estanimolinas/como-funciona-un-agente-por-dentro.git
+cd como-funciona-un-agente-por-dentro
 python3 -m venv .venv
 ./.venv/bin/pip install -e ".[dev]"
 
