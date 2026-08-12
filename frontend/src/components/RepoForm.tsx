@@ -14,9 +14,11 @@ const EXAMPLES: { label: string; repoUrl: string; question: string }[] = [
     question: '¿Cómo se define la versión del paquete?',
   },
   {
-    label: 'pallets/click — ¿Cómo funciona el decorador @click.command?',
-    repoUrl: 'https://github.com/pallets/click',
-    question: '¿Cómo funciona el decorador @click.command?',
+    label:
+      'asabeneh/30-days-of-python — ¿Cómo están implementadas las operaciones aritméticas en los ejemplos de este repo?',
+    repoUrl: 'https://github.com/asabeneh/30-days-of-python',
+    question:
+      '¿Cómo están implementadas las operaciones aritméticas (suma, resta, multiplicación) en los ejemplos de este repositorio?',
   },
 ]
 
@@ -102,17 +104,23 @@ export function RepoForm({ onSubmit }: RepoFormProps) {
             </p>
           </>
         ) : null}
-        <div className="flex flex-wrap gap-2">
-          {EXAMPLES.map((example) => (
-            <button
-              key={example.label}
-              type="button"
-              onClick={() => fillExample(example)}
-              className="rounded border-2 border-amber-700 bg-amber-950 px-2 py-1 text-xs text-amber-100 hover:bg-amber-900"
-            >
-              Probar: {example.label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap gap-2">
+            {EXAMPLES.map((example) => (
+              <button
+                key={example.label}
+                type="button"
+                onClick={() => fillExample(example)}
+                className="rounded border-2 border-amber-700 bg-amber-950 px-2 py-1 text-xs text-amber-100 hover:bg-amber-900"
+              >
+                Probar: {example.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">
+            El agente decide qué método usar según la pregunta — no siempre elige búsqueda
+            semántica, incluso con estos ejemplos.
+          </p>
         </div>
         <button
           type="submit"

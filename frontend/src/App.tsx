@@ -16,7 +16,7 @@ function App() {
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 p-6 text-slate-100">
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6 text-slate-100">
       <div className="flex flex-col gap-2">
         <h1 className="text-4xl font-bold tracking-tight">
           Agent<span className="text-rose-500">Trace</span>
@@ -28,7 +28,9 @@ function App() {
           <li>Leé la respuesta final.</li>
         </ol>
       </div>
-      <RepoForm onSubmit={handleSubmit} />
+      <div className="max-w-2xl">
+        <RepoForm onSubmit={handleSubmit} />
+      </div>
       <div className="flex flex-col gap-4">
         {runs.map((run) => (
           <RunCard key={run.id} repoUrl={run.repoUrl} question={run.question} apiKey={run.apiKey} />

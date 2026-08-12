@@ -132,4 +132,28 @@ describe('TwoColumnLog', () => {
     render(<TwoColumnLog events={[]} status="connecting" isTruncated={false} />)
     expect(screen.getByText(/conectando/i)).toBeInTheDocument()
   })
+
+  it('shows an explanatory empty-state message in the RAG column once the run is done and it was never used', () => {
+    const events: StreamEvent[] = [
+      { type: 'tool_call', tool: 'Read', input: { file_path: 'main.py' } },
+      {
+        type: 'tool_result',
+        tool: 'Read',
+        tool_use_id: 'toolu_3',
+        output_preview: 'print("hi")',
+        is_error: false,
+      },
+      { type: 'done' },
+    ]
+    render(<TwoColumnLog events={events} status="done" isTruncated={false} />)
+    expect(screen.getByText(/no usó búsqueda semántica/i)).toBeInTheDocument()
+  })
+
+  it('does not show the RAG empty-state message while still streaming', () => {
+    const events: StreamEvent[] = [
+      { type: 'tool_call', tool: 'Read', input: { file_path: 'main.py' } },
+    ]
+    render(<TwoColumnLog events={events} status="streaming" isTruncated={false} />)
+    expect(screen.queryByText(/no usó búsqueda semántica/i)).not.toBeInTheDocument()
+  })
 })

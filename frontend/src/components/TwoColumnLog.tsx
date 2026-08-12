@@ -54,9 +54,9 @@ export function TwoColumnLog({ events, status, isTruncated }: TwoColumnLogProps)
         <EventLogLine key={`reasoning-${i}`} event={event} />
       ))}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Búsqueda semántica
+        <div className="rounded border-l-4 border-emerald-600 bg-emerald-950/20 py-1 pl-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-500">
+            Búsqueda semántica (RAG)
           </div>
           <div className="flex flex-col gap-2">
             {ragEvents.map((event, i) => (
@@ -65,10 +65,16 @@ export function TwoColumnLog({ events, status, isTruncated }: TwoColumnLogProps)
             {ragExplanation ? (
               <EventLogLine event={{ type: 'answer_token', text: ragExplanation }} />
             ) : null}
+            {status === 'done' && ragEvents.length === 0 ? (
+              <div className="text-xs italic text-slate-500">
+                El agente no usó búsqueda semántica para esta pregunta — fue directo a los
+                archivos.
+              </div>
+            ) : null}
           </div>
         </div>
-        <div>
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <div className="rounded border-l-4 border-sky-600 bg-sky-950/20 py-1 pl-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-sky-500">
             Herramientas de archivo
           </div>
           <div className="flex flex-col gap-2">
@@ -77,6 +83,12 @@ export function TwoColumnLog({ events, status, isTruncated }: TwoColumnLogProps)
             ))}
             {toolsExplanation ? (
               <EventLogLine event={{ type: 'answer_token', text: toolsExplanation }} />
+            ) : null}
+            {status === 'done' && toolsEvents.length === 0 ? (
+              <div className="text-xs italic text-slate-500">
+                El agente no exploró archivos directamente para esta pregunta — usó solo
+                búsqueda semántica.
+              </div>
             ) : null}
           </div>
         </div>
